@@ -147,16 +147,26 @@ function collectPlayerData() {
       });
     }
 
+    // 手入力ページ → ホーム画面 → デフォルト の順にフォールバック
+    const manualName = nameInputs[i]?.value;
+    const homeName = document.querySelector('[data-home-player="' + i + '"]')?.value;
+    const finalName = manualName || homeName || (defaultPlayers[i]?.name) || `P${i + 1}`;
+    const manualHdcp = hdcpInputs[i]?.value;
+    const homeHdcp = document.querySelector('[data-home-hdcp="' + i + '"]')?.value;
+    const finalHdcp = parseInt(manualHdcp || homeHdcp) || (defaultPlayers[i]?.hdcp) || 0;
+
+    const totalOut = scoresOut.reduce((a, b) => a + b, 0);
+    const totalIn = scoresIn.reduce((a, b) => a + b, 0);
     players.push({
       index: i,
-      name: nameInputs[i]?.value || `P${i + 1}`,
-      hdcp: parseInt(hdcpInputs[i]?.value) || 0,
+      name: finalName,
+      hdcp: finalHdcp,
       scoresOut,
       scoresIn,
-      totalOut: scoresOut.reduce((a, b) => a + b, 0),
-      totalIn: scoresIn.reduce((a, b) => a + b, 0),
-      total: scoresOut.reduce((a, b) => a + b, 0) + scoresIn.reduce((a, b) => a + b, 0),
-      net: scoresOut.reduce((a, b) => a + b, 0) + scoresIn.reduce((a, b) => a + b, 0) - (parseInt(hdcpInputs[i]?.value) || 0),
+      totalOut,
+      totalIn,
+      total: totalOut + totalIn,
+      net: totalOut + totalIn - finalHdcp,
     });
   }
   return players;
@@ -774,10 +784,16 @@ function renderTeamPreview() {
   const nameInputs = document.querySelectorAll('.player-name-input');
   const players = [];
   for (let i = 0; i < 4; i++) {
+    const manualName = nameInputs[i]?.value;
+    const homeName = document.querySelector('[data-home-player="' + i + '"]')?.value;
+    const finalName = manualName || homeName || (defaultPlayers[i]?.name) || `P${i + 1}`;
+    const manualHdcp = hdcpInputs[i]?.value;
+    const homeHdcp = document.querySelector('[data-home-hdcp="' + i + '"]')?.value;
+    const finalHdcp = parseInt(manualHdcp || homeHdcp) || (defaultPlayers[i]?.hdcp) || 0;
     players.push({
       index: i,
-      name: nameInputs[i]?.value || `P${i + 1}`,
-      hdcp: parseInt(hdcpInputs[i]?.value) || 0,
+      name: finalName,
+      hdcp: finalHdcp,
     });
   }
 
@@ -1481,7 +1497,7 @@ function renderScoreTable(tableId, pars, startHole) {
   for (let i = 0; i < playerCount; i++) {
     bodyHTML += `<tr><td class="td-player">${names[i]}</td>`;
     for (let h = 0; h < 9; h++) {
-      bodyHTML += `<td><input type="number" class="score-input" min="1" max="15"></td>`;
+      bodyHTML += `<td><input type="number" class="score-input" min="1" max="20" readonly style="cursor:pointer;"></td>`;
     }
     bodyHTML += '<td class="td-total">-</td></tr>';
   }
@@ -1732,7 +1748,9 @@ async function analyzeScorecard() {
       fillOcrScores('score-table-in', ocrScores.in);
       calculateTableTotals('score-table-out');
       calculateTableTotals('score-table-in');
+      colorizeAllScoreInputs();
     }
+    makeScoreInputsReadonly();
 
     if (progressBar) progressBar.style.width = '100%';
 
@@ -1804,6 +1822,7 @@ async function analyzeScorecard() {
     renderPlayerInputs();
     renderScoreTable('score-table-out', PAR_OUT, 1);
     renderScoreTable('score-table-in', PAR_IN, 10);
+    makeScoreInputsReadonly();
 
   } finally {
     modal.style.display = 'none';
@@ -2116,19 +2135,207 @@ document.addEventListener('input', function(e) {
     if (table) {
       calculateTableTotals(table.id);
     }
-    
-    // 次のセルに自動フォーカス
-    const val = e.target.value;
-    if (val.length >= 1 && parseInt(val) >= 3) {
-      const allInputs = Array.from(table.querySelectorAll('.score-input'));
-      const currentIdx = allInputs.indexOf(e.target);
-      if (currentIdx < allInputs.length - 1) {
-        allInputs[currentIdx + 1].focus();
-        allInputs[currentIdx + 1].select();
-      }
-    }
+    colorizeScoreInput(e.target);
   }
 });
+
+// =================== スコア入力ナンバーパッド ===================
+let numpadTarget = null; // 現在選択中のinput要素
+let allScoreInputs = []; // 全スコア入力セルの配列
+
+function getAllScoreInputs() {
+  const outInputs = Array.from(document.querySelectorAll('#score-table-out .score-input'));
+  const inInputs = Array.from(document.querySelectorAll('#score-table-in .score-input'));
+  return [...outInputs, ...inInputs];
+}
+
+function getScoreInputInfo(input) {
+  const table = input.closest('table');
+  const isOut = table?.id === 'score-table-out';
+  const row = input.closest('tr');
+  const rows = Array.from(table.querySelectorAll('tbody tr'));
+  const playerIdx = rows.indexOf(row);
+  const cells = Array.from(row.querySelectorAll('.score-input'));
+  const holeIdx = cells.indexOf(input);
+  const holeNum = isOut ? holeIdx + 1 : holeIdx + 10;
+  const pars = isOut ? PAR_OUT : PAR_IN;
+  const par = pars[holeIdx] || 4;
+  const names = getPlayerNames();
+  const playerName = names[playerIdx] || ('P' + (playerIdx + 1));
+  return { holeNum, par, playerName, playerIdx, holeIdx, isOut };
+}
+
+function colorizeScoreInput(input) {
+  input.classList.remove('has-value', 'is-birdie-score', 'is-bogey-score', 'is-double-score');
+  const val = parseInt(input.value);
+  if (isNaN(val)) return;
+  input.classList.add('has-value');
+  const info = getScoreInputInfo(input);
+  const diff = val - info.par;
+  if (diff <= -1) input.classList.add('is-birdie-score');
+  else if (diff === 1) input.classList.add('is-bogey-score');
+  else if (diff >= 2) input.classList.add('is-double-score');
+}
+
+function colorizeAllScoreInputs() {
+  document.querySelectorAll('.score-input').forEach(inp => colorizeScoreInput(inp));
+}
+
+function openNumpad(input) {
+  allScoreInputs = getAllScoreInputs();
+  numpadTarget = input;
+
+  // 全セルのハイライトを消す
+  allScoreInputs.forEach(inp => inp.classList.remove('numpad-active'));
+  input.classList.add('numpad-active');
+
+  const info = getScoreInputInfo(input);
+
+  // ヘッダー更新
+  document.getElementById('numpad-info').textContent = `H${info.holeNum} - ${info.playerName}`;
+  document.getElementById('numpad-par').textContent = `PAR ${info.par}`;
+
+  // PAR/バーディのボタン色分け
+  document.querySelectorAll('.numpad-btn[data-val]').forEach(btn => {
+    btn.classList.remove('is-par', 'is-birdie');
+    const v = parseInt(btn.dataset.val);
+    if (!isNaN(v)) {
+      if (v === info.par) btn.classList.add('is-par');
+      else if (v < info.par) btn.classList.add('is-birdie');
+    }
+  });
+
+  // 進捗
+  const idx = allScoreInputs.indexOf(input);
+  document.getElementById('numpad-progress').textContent = `${idx + 1}/${allScoreInputs.length}`;
+
+  // 10+入力欄を閉じる
+  document.getElementById('numpad-10plus-row').style.display = 'none';
+
+  // 表示
+  document.getElementById('score-numpad').style.display = 'block';
+
+  // 選択中セルが見えるようスクロール
+  input.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+}
+
+function closeNumpad() {
+  document.getElementById('score-numpad').style.display = 'none';
+  if (numpadTarget) {
+    numpadTarget.classList.remove('numpad-active');
+  }
+  numpadTarget = null;
+}
+
+function startScoreEntry() {
+  allScoreInputs = getAllScoreInputs();
+  // 最初の未入力セルを探す
+  const firstEmpty = allScoreInputs.find(inp => !inp.value || inp.value === '');
+  if (firstEmpty) {
+    openNumpad(firstEmpty);
+  } else if (allScoreInputs.length > 0) {
+    openNumpad(allScoreInputs[0]);
+  } else {
+    showToast('スコアテーブルが準備されていません');
+  }
+}
+
+function setScoreAndAdvance(value) {
+  if (!numpadTarget) return;
+  numpadTarget.value = value;
+  numpadTarget.dispatchEvent(new Event('input', { bubbles: true }));
+  colorizeScoreInput(numpadTarget);
+
+  // 合計再計算
+  const table = numpadTarget.closest('table');
+  if (table) calculateTableTotals(table.id);
+
+  // 次のセルへ
+  numpadAdvance();
+}
+
+function numpadAdvance() {
+  if (!numpadTarget) return;
+  const idx = allScoreInputs.indexOf(numpadTarget);
+  if (idx < allScoreInputs.length - 1) {
+    openNumpad(allScoreInputs[idx + 1]);
+  } else {
+    closeNumpad();
+    showToast('全ホール入力完了！');
+  }
+}
+
+function numpadPrev() {
+  if (!numpadTarget) return;
+  const idx = allScoreInputs.indexOf(numpadTarget);
+  if (idx > 0) {
+    openNumpad(allScoreInputs[idx - 1]);
+  }
+}
+
+function numpadNext() {
+  numpadAdvance();
+}
+
+function confirmCustomScore() {
+  const customInput = document.getElementById('numpad-custom-input');
+  const val = parseInt(customInput.value);
+  if (!isNaN(val) && val >= 1) {
+    setScoreAndAdvance(val);
+    document.getElementById('numpad-10plus-row').style.display = 'none';
+    customInput.value = '';
+  }
+}
+
+// ナンバーパッドのボタンクリック
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.numpad-btn');
+  if (!btn) return;
+  const val = btn.dataset.val;
+  if (!val || !numpadTarget) return;
+
+  if (val === 'clear') {
+    numpadTarget.value = '';
+    numpadTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    colorizeScoreInput(numpadTarget);
+    const table = numpadTarget.closest('table');
+    if (table) calculateTableTotals(table.id);
+  } else if (val === '10+') {
+    const row = document.getElementById('numpad-10plus-row');
+    row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+    if (row.style.display === 'flex') {
+      document.getElementById('numpad-custom-input').focus();
+    }
+  } else if (val === 'next') {
+    numpadAdvance();
+  } else {
+    setScoreAndAdvance(parseInt(val));
+  }
+});
+
+// 10+入力でEnterキー対応
+document.addEventListener('keydown', function(e) {
+  if (e.target.id === 'numpad-custom-input' && e.key === 'Enter') {
+    confirmCustomScore();
+  }
+});
+
+// スコアセルをタップしたらナンバーパッドを開く（readonlyにする）
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('score-input')) {
+    e.preventDefault();
+    e.target.blur(); // キーボードを出さない
+    openNumpad(e.target);
+  }
+});
+
+// score-inputをreadonlyにする（テーブル生成時にも適用）
+function makeScoreInputsReadonly() {
+  document.querySelectorAll('.score-input').forEach(inp => {
+    inp.setAttribute('readonly', 'readonly');
+    inp.style.cursor = 'pointer';
+  });
+}
 
 // =================== 詳細トグル（OUT / IN 切り替え） ===================
 document.querySelectorAll('.detail-toggle').forEach(btn => {
@@ -2141,12 +2348,16 @@ document.querySelectorAll('.detail-toggle').forEach(btn => {
 
 // =================== 結果シェア ===================
 function shareResult() {
-  const shareText = `【程ヶ谷CC 握り結果】\n` +
-    `2026/2/22\n` +
-    `1位 田中 82 (NET 74) → +7,000円\n` +
-    `2位 山田 88 (NET 76) → +2,500円\n` +
-    `3位 佐藤 95 (NET 80) → -5,000円\n` +
-    `4位 鈴木 98 (NET 80) → -4,500円`;
+  // 実際のプレーヤーデータを使ってシェアテキストを生成
+  const players = collectPlayerData();
+  const sorted = [...players].sort((a, b) => a.net - b.net);
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`;
+  let lines = [`【程ヶ谷CC 握り結果】`, dateStr];
+  sorted.forEach((p, i) => {
+    lines.push(`${i+1}位 ${p.name} ${p.total} (NET ${p.net})`);
+  });
+  const shareText = lines.join('\n');
 
   if (navigator.share) {
     navigator.share({
@@ -2295,8 +2506,554 @@ function prefillScores() {
   // 合計を計算
   calculateTableTotals('score-table-out');
   calculateTableTotals('score-table-in');
+
+  // スコア色分け
+  colorizeAllScoreInputs();
 }
 
+// =================== ショット記録機能 ===================
+let shotTrackerData = {}; // { 1: [{type,club,distance,direction,quality,puttResult},...], ... }
+let currentShotHole = 1;
+let currentShotEntryType = 'shot'; // 'shot' or 'putt'
+
+// localStorage からデータ読み込み
+function loadShotData() {
+  try {
+    const saved = localStorage.getItem('hodogaya_shot_data');
+    if (saved) shotTrackerData = JSON.parse(saved);
+  } catch(e) { console.warn('Shot data load failed', e); }
+}
+
+// localStorage にデータ保存
+function saveShotData() {
+  try {
+    localStorage.setItem('hodogaya_shot_data', JSON.stringify(shotTrackerData));
+  } catch(e) { console.warn('Shot data save failed', e); }
+}
+
+// ホールタブを生成
+function renderHoleTabs() {
+  const container = document.getElementById('hole-tabs');
+  if (!container) return;
+  let html = '';
+  for (let h = 1; h <= 18; h++) {
+    const isActive = h === currentShotHole ? ' active' : '';
+    const hasData = (shotTrackerData[h] && shotTrackerData[h].length > 0) ? ' has-data' : '';
+    html += '<button class="hole-tab' + isActive + hasData + '" onclick="selectShotHole(' + h + ')">' + h + '</button>';
+  }
+  container.innerHTML = html;
+}
+
+// ホール選択
+function selectShotHole(h) {
+  currentShotHole = h;
+  renderHoleTabs();
+  renderCurrentHoleInfo();
+  renderShotList();
+  checkScoreMismatch();
+  // タブをスクロール
+  const tabs = document.querySelectorAll('.hole-tab');
+  if (tabs[h-1]) tabs[h-1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+}
+
+// 現在のホール情報を表示
+function renderCurrentHoleInfo() {
+  const allPar = [...PAR_OUT, ...PAR_IN];
+  const par = allPar[currentShotHole - 1];
+  const badge = document.getElementById('hole-number-badge');
+  const parBadge = document.getElementById('hole-par-badge');
+  if (badge) badge.textContent = 'H' + currentShotHole;
+  if (parBadge) parBadge.textContent = 'PAR ' + par;
+}
+
+// ショットリストを描画
+function renderShotList() {
+  const container = document.getElementById('shot-list');
+  if (!container) return;
+  const shots = shotTrackerData[currentShotHole] || [];
+  if (shots.length === 0) {
+    container.innerHTML = '<div class="shot-list-empty"><i class="fas fa-plus-circle"></i> ショットを追加してください</div>';
+    return;
+  }
+  let shotNum = 0;
+  let puttNum = 0;
+  let html = '';
+  shots.forEach((s, idx) => {
+    const isShot = s.type === 'shot';
+    const isPutt = s.type === 'putt';
+    const isPenalty = s.type === 'penalty';
+    if (isShot) { shotNum++; } else if (isPutt) { puttNum++; }
+    let num, numClass;
+    if (isShot) { num = shotNum; numClass = ''; }
+    else if (isPutt) { num = 'P' + puttNum; numClass = ' putt-number'; }
+    else { num = '!'; numClass = ' penalty-number'; }
+    let mainText = '';
+    let subText = '';
+    if (isShot) {
+      mainText = (s.club || '') + (s.distance ? ' ' + s.distance + 'yd' : '');
+      if (s.bunker) mainText = '<i class="fas fa-mountain" style="color:#c8a04a;"></i> ' + mainText;
+      const parts = [];
+      if (s.direction && s.direction !== 'まっすぐ') parts.push(s.direction);
+      if (s.direction === 'まっすぐ') parts.push('✓ まっすぐ');
+      if (s.quality && s.quality !== '普通') parts.push(s.quality);
+      if (s.quality === '普通') parts.push('✓ 普通');
+      subText = parts.join(' / ');
+    } else if (isPutt) {
+      mainText = (s.distance ? s.distance + 'm' : '') + (s.puttResult ? ' → ' + s.puttResult : '');
+      if (s.puttResult === '入った') mainText = (s.distance ? s.distance + 'm' : '') + ' → ✓ 入った';
+      if (s.greenPosition && puttNum === 1) {
+        subText = 'オン: ' + (GREEN_ZONE_LABELS[s.greenPosition] || s.greenPosition);
+      }
+    } else {
+      mainText = s.penaltyType || 'ペナルティ';
+      subText = s.penaltyType === 'OB' ? '+1打（打ち直し）' : '+1打';
+    }
+    html += '<div class="shot-item">';
+    html += '  <div class="shot-item-number' + numClass + '">' + num + '</div>';
+    html += '  <div class="shot-item-details">';
+    html += '    <div class="shot-item-main">' + mainText + '</div>';
+    if (subText) html += '    <div class="shot-item-sub">' + subText + '</div>';
+    html += '  </div>';
+    html += '  <button class="shot-item-delete" onclick="deleteShotEntry(' + idx + ')"><i class="fas fa-times"></i></button>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+// ショット入力フォームを開く
+function openShotEntry(type) {
+  currentShotEntryType = type;
+  const overlay = document.getElementById('shot-entry-overlay');
+  const title = document.getElementById('shot-entry-title');
+  if (!overlay) return;
+  overlay.style.display = 'block';
+  
+  // タイトル
+  if (type === 'shot') {
+    if (title) title.textContent = 'ショット追加 (H' + currentShotHole + ')';
+  } else if (type === 'putt') {
+    if (title) title.textContent = 'パット追加 (H' + currentShotHole + ')';
+  } else {
+    if (title) title.textContent = 'ペナルティ (H' + currentShotHole + ')';
+  }
+  
+  // フィールドの表示切替
+  document.querySelectorAll('.shot-only-field').forEach(el => el.style.display = type === 'shot' ? '' : 'none');
+  document.querySelectorAll('.putt-only-field').forEach(el => el.style.display = type === 'putt' ? '' : 'none');
+  document.querySelectorAll('.penalty-only-field').forEach(el => el.style.display = type === 'penalty' ? '' : 'none');
+  
+  // 距離フィールド: ペナルティでは非表示
+  const distField = document.getElementById('shot-distance-input');
+  const distParent = distField ? distField.closest('.shot-field') : null;
+  if (distParent) distParent.style.display = type === 'penalty' ? 'none' : '';
+  
+  // パットの場合、既にパットがあればオン位置フィールドを非表示
+  if (type === 'putt') {
+    const shots = shotTrackerData[currentShotHole] || [];
+    const existingPutts = shots.filter(s => s.type === 'putt').length;
+    const greenField = document.getElementById('putt-green-field');
+    if (greenField) greenField.style.display = existingPutts > 0 ? 'none' : '';
+  }
+  
+  // 距離ラベル・単位更新
+  const label = document.getElementById('shot-distance-label');
+  const unitEl = document.getElementById('shot-distance-unit');
+  if (type === 'putt') {
+    if (label) label.textContent = '距離 (m)';
+    if (unitEl) unitEl.textContent = 'm';
+  } else {
+    if (label) label.textContent = '距離 (yd)';
+    if (unitEl) unitEl.textContent = 'yd';
+  }
+  
+  // フォームリセット
+  resetShotForm();
+}
+
+// フォームリセット
+function resetShotForm() {
+  const distInput = document.getElementById('shot-distance-input');
+  if (distInput) distInput.value = '';
+  document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.club-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.green-zone').forEach(b => b.classList.remove('active'));
+  const greenLabel = document.getElementById('green-selected-label');
+  if (greenLabel) greenLabel.textContent = '';
+  const bunkerBtn = document.getElementById('bunker-toggle');
+  if (bunkerBtn) bunkerBtn.classList.remove('active');
+}
+
+// Pill ボタン選択
+function selectPill(btn) {
+  const container = btn.closest('.pill-selector');
+  container.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// クラブ選択
+function selectClub(btn) {
+  document.querySelectorAll('.club-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// グリーンゾーン選択
+const GREEN_ZONE_LABELS = {
+  '奥左': '奥・左', '奥中': '奥・センター', '奥右': '奥・右',
+  '中左': '真ん中・左', '中中': 'ピン周り', '中右': '真ん中・右',
+  '前左': '手前・左', '前中': '手前・センター', '前右': '手前・右'
+};
+
+function selectGreenZone(btn) {
+  document.querySelectorAll('.green-zone').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const label = document.getElementById('green-selected-label');
+  if (label) label.textContent = GREEN_ZONE_LABELS[btn.dataset.zone] || btn.dataset.zone;
+}
+
+// バンカートグル
+function toggleBunker() {
+  const btn = document.getElementById('bunker-toggle');
+  if (btn) btn.classList.toggle('active');
+}
+
+// 入力フォームを閉じる
+function closeShotEntry() {
+  const overlay = document.getElementById('shot-entry-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// ショットを保存
+function saveShotEntry() {
+  const distInput = document.getElementById('shot-distance-input');
+  const distance = distInput ? parseInt(distInput.value) || 0 : 0;
+  
+  const entry = {
+    type: currentShotEntryType,
+    distance: distance || null
+  };
+  
+  if (currentShotEntryType === 'shot') {
+    // クラブ
+    const activeClub = document.querySelector('.club-btn.active');
+    entry.club = activeClub ? activeClub.dataset.val : null;
+    // バンカー
+    const bunkerBtn = document.getElementById('bunker-toggle');
+    entry.bunker = bunkerBtn ? bunkerBtn.classList.contains('active') : false;
+    // 方向
+    const activeDir = document.querySelector('#shot-direction-pills .pill-btn.active');
+    entry.direction = activeDir ? activeDir.dataset.val : null;
+    // 打球品質
+    const activeQual = document.querySelector('#shot-quality-pills .pill-btn.active');
+    entry.quality = activeQual ? activeQual.dataset.val : null;
+  } else if (currentShotEntryType === 'putt') {
+    // グリーン位置
+    const activeZone = document.querySelector('.green-zone.active');
+    entry.greenPosition = activeZone ? activeZone.dataset.zone : null;
+    // パット結果
+    const activePutt = document.querySelector('#putt-result-pills .pill-btn.active');
+    entry.puttResult = activePutt ? activePutt.dataset.val : null;
+  } else {
+    // ペナルティ
+    const activePenalty = document.querySelector('#penalty-type-pills .pill-btn.active');
+    entry.penaltyType = activePenalty ? activePenalty.dataset.val : null;
+    entry.type = 'penalty';
+  }
+  
+  // データに追加
+  if (!shotTrackerData[currentShotHole]) shotTrackerData[currentShotHole] = [];
+  shotTrackerData[currentShotHole].push(entry);
+  saveShotData();
+  
+  // UI更新
+  closeShotEntry();
+  renderShotList();
+  renderHoleTabs();
+  checkScoreMismatch();
+}
+
+// ショットを削除
+function deleteShotEntry(idx) {
+  const shots = shotTrackerData[currentShotHole];
+  if (!shots || idx < 0 || idx >= shots.length) return;
+  shots.splice(idx, 1);
+  if (shots.length === 0) delete shotTrackerData[currentShotHole];
+  saveShotData();
+  renderShotList();
+  renderHoleTabs();
+  checkScoreMismatch();
+}
+
+// データをシェア（テキスト形式）
+function exportShotData() {
+  const allPar = [...PAR_OUT, ...PAR_IN];
+  let text = '⛳ ショット記録\n';
+  text += '程ヶ谷カントリー倶楽部\n';
+  text += new Date().toLocaleDateString('ja-JP') + '\n\n';
+  
+  for (let h = 1; h <= 18; h++) {
+    const shots = shotTrackerData[h];
+    if (!shots || shots.length === 0) continue;
+    const par = allPar[h - 1];
+    text += '【H' + h + ' PAR' + par + '】\n';
+    let shotNum = 0;
+    let puttNum = 0;
+    shots.forEach(s => {
+      if (s.type === 'shot') {
+        shotNum++;
+        let line = '  ' + shotNum + '. ';
+        if (s.bunker) line += '[バンカー] ';
+        if (s.club) line += s.club + ' ';
+        if (s.distance) line += s.distance + 'yd ';
+        if (s.direction) line += s.direction + ' ';
+        if (s.quality && s.quality !== '普通') line += s.quality;
+        text += line.trim() + '\n';
+      } else if (s.type === 'putt') {
+        puttNum++;
+        let line = '  P' + puttNum + '. ';
+        if (s.greenPosition && puttNum === 1) line += '[' + (GREEN_ZONE_LABELS[s.greenPosition] || s.greenPosition) + '] ';
+        if (s.distance) line += s.distance + 'm ';
+        if (s.puttResult) line += '→ ' + s.puttResult;
+        text += line.trim() + '\n';
+      } else if (s.type === 'penalty') {
+        text += '  ⚠ ' + (s.penaltyType || 'ペナルティ') + ' (+1打)\n';
+      }
+    });
+    text += '\n';
+  }
+  
+  if (navigator.share) {
+    navigator.share({ text: text }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('クリップボードにコピーしました');
+    }).catch(() => {
+      alert(text);
+    });
+  }
+}
+
+// データリセット
+function clearShotData() {
+  if (!confirm('ショット記録をすべて削除しますか？')) return;
+  shotTrackerData = {};
+  saveShotData();
+  renderHoleTabs();
+  renderShotList();
+}
+
+// ショットトラッカー初期化
+function initShotTracker() {
+  loadShotData();
+  renderHoleTabs();
+  renderCurrentHoleInfo();
+  renderShotList();
+  checkScoreMismatch();
+}
+
+// =================== 打数チェック ===================
+function getMyScoreForHole(holeNum) {
+  // player index 0 = 自分のスコアを取得
+  const isOut = holeNum <= 9;
+  const tableId = isOut ? 'score-table-out' : 'score-table-in';
+  const holeIdx = isOut ? holeNum - 1 : holeNum - 10;
+  const table = document.getElementById(tableId);
+  if (!table) return null;
+  const firstRow = table.querySelector('tbody tr'); // 最初のプレーヤー = 自分
+  if (!firstRow) return null;
+  const inputs = firstRow.querySelectorAll('.score-input');
+  if (!inputs[holeIdx]) return null;
+  const val = parseInt(inputs[holeIdx].value);
+  return isNaN(val) ? null : val;
+}
+
+function countShotTrackerStrokes(holeNum) {
+  const shots = shotTrackerData[holeNum] || [];
+  if (shots.length === 0) return null;
+  let total = 0;
+  shots.forEach(s => {
+    if (s.type === 'shot') total += 1;
+    else if (s.type === 'putt') total += 1;
+    else if (s.type === 'penalty') total += 1; // ペナルティ = +1打
+  });
+  return total;
+}
+
+function checkScoreMismatch() {
+  const alertEl = document.getElementById('score-mismatch-alert');
+  const textEl = document.getElementById('score-mismatch-text');
+  if (!alertEl || !textEl) return;
+  
+  const trackerCount = countShotTrackerStrokes(currentShotHole);
+  const scoreCount = getMyScoreForHole(currentShotHole);
+  
+  if (trackerCount === null || scoreCount === null) {
+    alertEl.style.display = 'none';
+    return;
+  }
+  
+  if (trackerCount !== scoreCount) {
+    alertEl.style.display = 'flex';
+    textEl.textContent = 'H' + currentShotHole + ': スコア入力=' + scoreCount + '打 / ショット記録=' + trackerCount + '打（差: ' + (trackerCount - scoreCount) + '）';
+  } else {
+    alertEl.style.display = 'none';
+  }
+}
+
+// =================== ショット集計機能 ===================
+const CLUB_CATEGORIES = [
+  { key: 'driver', name: 'ドライバー', clubs: ['1W'], type: 'shot' },
+  { key: 'fw', name: 'フェアウェイウッド', clubs: ['3W', '5W'], type: 'shot' },
+  { key: 'ut', name: 'ユーティリティ', clubs: ['4U', '5U'], type: 'shot' },
+  { key: 'iron', name: 'アイアン', clubs: ['5I', '6I', '7I', '8I', '9I', 'PW'], type: 'shot' },
+  { key: 'wedge', name: 'ウェッジ', clubs: ['52\u00b0', '58\u00b0'], type: 'shot' },
+  { key: 'putt', name: 'パット', clubs: [], type: 'putt' }
+];
+
+function getAllShotEntries() {
+  const all = [];
+  for (let h = 1; h <= 18; h++) {
+    const shots = shotTrackerData[h] || [];
+    shots.forEach(s => all.push({ ...s, hole: h }));
+  }
+  return all;
+}
+
+function categorizeEntry(entry) {
+  if (entry.type === 'putt') return 'putt';
+  for (const cat of CLUB_CATEGORIES) {
+    if (cat.type === 'shot' && entry.club && cat.clubs.includes(entry.club)) return cat.key;
+  }
+  return null; // クラブ未選択
+}
+
+function buildStatsHtml(entries, category) {
+  if (entries.length === 0) return '<div class="stats-no-data">データなし</div>';
+  
+  let html = '';
+  
+  if (category.type === 'shot') {
+    // 平均距離
+    const withDist = entries.filter(e => e.distance);
+    if (withDist.length > 0) {
+      const avg = Math.round(withDist.reduce((s, e) => s + e.distance, 0) / withDist.length);
+      html += '<div class="stats-section"><div class="stats-avg-dist">平均距離: ' + avg + 'yd</div></div>';
+    }
+    
+    // 方向集計
+    const dirLabels = ['大きく左', 'やや左', 'まっすぐ', 'やや右', '大きく右'];
+    const dirColors = ['bar-maroon', 'bar-gold', 'bar-green', 'bar-gold', 'bar-maroon'];
+    const dirShort = ['大左', 'やや左', 'まっすぐ', 'やや右', '大右'];
+    const dirCounts = dirLabels.map(l => entries.filter(e => e.direction === l).length);
+    const maxDir = Math.max(...dirCounts, 1);
+    
+    html += '<div class="stats-section"><div class="stats-section-title">方向</div>';
+    dirLabels.forEach((l, i) => {
+      const pct = Math.round((dirCounts[i] / entries.length) * 100);
+      const w = Math.round((dirCounts[i] / maxDir) * 100);
+      html += '<div class="stats-bar-row">';
+      html += '<div class="stats-bar-label">' + dirShort[i] + '</div>';
+      html += '<div class="stats-bar-track"><div class="stats-bar-fill ' + dirColors[i] + '" style="width:' + w + '%"></div></div>';
+      html += '<div class="stats-bar-value">' + dirCounts[i] + ' (' + pct + '%)</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    
+    // ダフリ・トップ集計
+    const qualLabels = ['大きくダフリ', 'ややダフリ', '普通', 'ややトップ', '大きくトップ'];
+    const qualColors = ['bar-maroon', 'bar-gold', 'bar-green', 'bar-gold', 'bar-maroon'];
+    const qualShort = ['大ダフ', 'ややダフ', '普通', 'ややトップ', '大トップ'];
+    const qualCounts = qualLabels.map(l => entries.filter(e => e.quality === l).length);
+    const maxQual = Math.max(...qualCounts, 1);
+    
+    html += '<div class="stats-section"><div class="stats-section-title">打球</div>';
+    qualLabels.forEach((l, i) => {
+      const pct = Math.round((qualCounts[i] / entries.length) * 100);
+      const w = Math.round((qualCounts[i] / maxQual) * 100);
+      html += '<div class="stats-bar-row">';
+      html += '<div class="stats-bar-label">' + qualShort[i] + '</div>';
+      html += '<div class="stats-bar-track"><div class="stats-bar-fill ' + qualColors[i] + '" style="width:' + w + '%"></div></div>';
+      html += '<div class="stats-bar-value">' + qualCounts[i] + ' (' + pct + '%)</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    
+  } else {
+    // パット集計
+    const puttLabels = ['入った', '左外し', '右外し', 'ショート', 'オーバー'];
+    const puttColors = ['bar-green', 'bar-blue', 'bar-blue', 'bar-gold', 'bar-maroon'];
+    const puttCounts = puttLabels.map(l => entries.filter(e => e.puttResult === l).length);
+    const maxPutt = Math.max(...puttCounts, 1);
+    
+    html += '<div class="stats-section"><div class="stats-section-title">結果</div>';
+    puttLabels.forEach((l, i) => {
+      const pct = Math.round((puttCounts[i] / entries.length) * 100);
+      const w = Math.round((puttCounts[i] / maxPutt) * 100);
+      html += '<div class="stats-bar-row">';
+      html += '<div class="stats-bar-label">' + l + '</div>';
+      html += '<div class="stats-bar-track"><div class="stats-bar-fill ' + puttColors[i] + '" style="width:' + w + '%"></div></div>';
+      html += '<div class="stats-bar-value">' + puttCounts[i] + ' (' + pct + '%)</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    
+    // オン位置集計
+    const withGreen = entries.filter(e => e.greenPosition);
+    if (withGreen.length > 0) {
+      const zoneKeys = ['奥左', '奥中', '奥右', '中左', '中中', '中右', '前左', '前中', '前右'];
+      const zoneCounts = zoneKeys.map(k => withGreen.filter(e => e.greenPosition === k).length);
+      const maxZone = Math.max(...zoneCounts, 1);
+      
+      html += '<div class="stats-section"><div class="stats-section-title">オン位置</div>';
+      zoneKeys.forEach((k, i) => {
+        if (zoneCounts[i] === 0) return;
+        const label = GREEN_ZONE_LABELS[k] || k;
+        const pct = Math.round((zoneCounts[i] / withGreen.length) * 100);
+        const w = Math.round((zoneCounts[i] / maxZone) * 100);
+        html += '<div class="stats-bar-row">';
+        html += '<div class="stats-bar-label">' + label + '</div>';
+        html += '<div class="stats-bar-track"><div class="stats-bar-fill bar-green" style="width:' + w + '%"></div></div>';
+        html += '<div class="stats-bar-value">' + zoneCounts[i] + ' (' + pct + '%)</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+  }
+  
+  return html;
+}
+
+function showShotStats() {
+  const container = document.getElementById('shot-stats-container');
+  if (!container) return;
+  
+  const allEntries = getAllShotEntries();
+  if (allEntries.length === 0) {
+    container.innerHTML = '<div class="stats-no-data">データがありません</div>';
+    container.style.display = 'block';
+    return;
+  }
+  
+  let html = '';
+  CLUB_CATEGORIES.forEach(cat => {
+    const entries = allEntries.filter(e => categorizeEntry(e) === cat.key);
+    if (entries.length === 0) return;
+    
+    html += '<div class="stats-category">';
+    html += '<div class="stats-category-header">';
+    html += '<span class="stats-category-name">' + cat.name + '</span>';
+    html += '<span class="stats-category-count">' + entries.length + '打</span>';
+    html += '</div>';
+    html += buildStatsHtml(entries, cat);
+    html += '</div>';
+  });
+  
+  if (!html) html = '<div class="stats-no-data">データがありません</div>';
+  container.innerHTML = html;
+  container.style.display = 'block';
+  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// =================== 初期化 ===================
 document.addEventListener('DOMContentLoaded', function() {
   try {
     console.log('[INIT] DOMContentLoaded fired');
@@ -2321,6 +3078,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // スコアカード読み取りデータを自動入力
     prefillScores();
+
+    // score-inputをreadonlyに
+    makeScoreInputsReadonly();
+
+    // ショットトラッカー初期化
+    initShotTracker();
 
     console.log('程ヶ谷CC Game Tsuru Han initialized');
   } catch (e) {
