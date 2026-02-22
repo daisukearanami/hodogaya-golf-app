@@ -1548,6 +1548,43 @@ function retakePhoto() {
   if (camera) camera.value = '';
 }
 
+// =================== 画像リサイズ（iOS対応） ===================
+function resizeImageForOCR(img, maxDim) {
+  maxDim = maxDim || 1600;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  let w = img.naturalWidth;
+  let h = img.naturalHeight;
+
+  // iOSのcanvasメモリ制限対策: 長辺をmaxDimに縮小
+  if (w > maxDim || h > maxDim) {
+    if (w > h) {
+      h = Math.round(h * maxDim / w);
+      w = maxDim;
+    } else {
+      w = Math.round(w * maxDim / h);
+      h = maxDim;
+    }
+  }
+
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(img, 0, 0, w, h);
+
+  // グレースケール + コントラスト強調
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+    gray = Math.min(255, Math.max(0, (gray - 128) * 1.5 + 128));
+    // 二値化（しきい値150）で数字を際立たせる
+    gray = gray > 150 ? 255 : 0;
+    d[i] = d[i+1] = d[i+2] = gray;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
 // =================== スコアカード解析（Tesseract.js OCR） ===================
 async function analyzeScorecard() {
   const img = document.getElementById('captured-image');
@@ -1562,50 +1599,60 @@ async function analyzeScorecard() {
   const progressBar = modal.querySelector('.loading-progress-bar');
   modal.style.display = 'flex';
   loadingText.textContent = 'OCRエンジンを準備中...';
-  loadingSubtext.textContent = '初回は少し時間がかかります';
+  loadingSubtext.textContent = '初回は少し時間がかかります（最大30秒）';
   if (progressBar) progressBar.style.width = '5%';
 
   try {
-    // --- 画像前処理 ---
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    ctx.drawImage(img, 0, 0);
-
-    // グレースケール + コントラスト強調
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imageData.data;
-    for (let i = 0; i < d.length; i += 4) {
-      let gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
-      // コントラスト強調
-      gray = Math.min(255, Math.max(0, (gray - 128) * 1.8 + 128));
-      d[i] = d[i+1] = d[i+2] = gray;
+    // Tesseract.jsが読み込まれているか確認
+    if (typeof Tesseract === 'undefined') {
+      throw new Error('OCRエンジンが読み込めません。インターネット接続を確認してください。');
     }
-    ctx.putImageData(imageData, 0, 0);
+
+    // --- 画像前処理（リサイズ含む） ---
+    loadingSubtext.textContent = '画像を処理中...';
+    if (progressBar) progressBar.style.width = '10%';
+
+    const canvas = resizeImageForOCR(img, 1600);
+    console.log('OCR canvas size:', canvas.width, 'x', canvas.height);
 
     loadingText.textContent = 'スコアを読み取り中...';
-    loadingSubtext.textContent = '数字を認識しています';
-    if (progressBar) progressBar.style.width = '20%';
+    loadingSubtext.textContent = 'OCRエンジンを起動中...';
+    if (progressBar) progressBar.style.width = '15%';
 
     // --- Tesseract OCR 実行 ---
-    const worker = await Tesseract.createWorker('eng', 1, {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          const pct = Math.round(20 + m.progress * 70);
-          if (progressBar) progressBar.style.width = pct + '%';
-          loadingSubtext.textContent = `認識中... ${pct}%`;
+    let worker;
+    try {
+      worker = await Tesseract.createWorker('eng', 1, {
+        logger: m => {
+          console.log('Tesseract:', m.status, m.progress);
+          if (m.status === 'recognizing text') {
+            const pct = Math.round(20 + m.progress * 70);
+            if (progressBar) progressBar.style.width = pct + '%';
+            loadingSubtext.textContent = '認識中... ' + pct + '%';
+          } else if (m.status === 'loading tesseract core') {
+            loadingSubtext.textContent = 'OCRコアを読み込み中...';
+          } else if (m.status === 'initializing tesseract') {
+            loadingSubtext.textContent = 'OCRを初期化中...';
+          } else if (m.status === 'loading language traineddata') {
+            loadingSubtext.textContent = '言語データを読み込み中...';
+          }
         }
-      }
-    });
+      });
+    } catch (workerErr) {
+      throw new Error('OCRエンジンの起動に失敗: ' + workerErr.message);
+    }
 
     await worker.setParameters({
       tessedit_char_whitelist: '0123456789',
       tessedit_pageseg_mode: '6',
     });
 
+    loadingSubtext.textContent = 'スコアカードを認識中...';
     const result = await worker.recognize(canvas);
     await worker.terminate();
+
+    console.log('OCR raw text:', result.data.text);
+    console.log('OCR words count:', result.data.words ? result.data.words.length : 0);
 
     if (progressBar) progressBar.style.width = '95%';
     loadingText.textContent = 'スコアを解析中...';
@@ -1634,11 +1681,24 @@ async function analyzeScorecard() {
 
     const filledCount = ocrScores ? ocrScores.filledCount : 0;
     const totalCells = playerCount * 18;
-    showToast(`${filledCount}/${totalCells} セルを読み取りました。間違いを修正してください`);
+    if (filledCount === 0) {
+      showToast('スコアを読み取れませんでした。手入力で修正してください。');
+    } else {
+      showToast(filledCount + '/' + totalCells + ' セルを読み取りました。間違いを修正してください');
+    }
 
   } catch (e) {
     console.error('OCR Error:', e);
-    showToast('読み取りに失敗しました: ' + e.message);
+    // ユーザーに詳しいエラーを表示
+    const errMsg = e.message || '不明なエラー';
+    showToast('読み取り失敗: ' + errMsg);
+
+    // エラーでも手入力画面に遷移して手入力可能にする
+    navigateTo('page-manual');
+    renderPlayerInputs();
+    renderScoreTable('score-table-out', PAR_OUT, 1);
+    renderScoreTable('score-table-in', PAR_IN, 10);
+
   } finally {
     modal.style.display = 'none';
     if (progressBar) progressBar.style.width = '0%';
