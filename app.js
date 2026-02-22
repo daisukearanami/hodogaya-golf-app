@@ -1528,8 +1528,12 @@ function handleImageSelect(event) {
 }
 
 function takePhoto() {
-  // ファイル入力をトリガー（モバイルではカメラが起動）
-  document.getElementById('file-input').click();
+  // カメラ専用のinputをトリガー（モバイルではカメラが起動）
+  const cameraInput = document.getElementById('file-input-camera');
+  if (cameraInput) {
+    cameraInput.value = '';
+    cameraInput.click();
+  }
 }
 
 function retakePhoto() {
@@ -1538,7 +1542,10 @@ function retakePhoto() {
   document.querySelector('.camera-placeholder').style.display = 'block';
   document.getElementById('btn-analyze').style.display = 'none';
   document.getElementById('btn-retake').style.display = 'none';
-  document.getElementById('file-input').value = '';
+  const gallery = document.getElementById('file-input-gallery');
+  const camera = document.getElementById('file-input-camera');
+  if (gallery) gallery.value = '';
+  if (camera) camera.value = '';
 }
 
 // =================== スコアカード解析（Tesseract.js OCR） ===================
