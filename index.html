@@ -90,6 +90,17 @@
         </div>
       </div>
 
+      <!-- プレーヤー名・ HDCP 入力 -->
+      <div class="section-card player-name-section">
+        <h2 class="section-title">
+          プレーヤー情報
+          <span class="section-title-en">Player Info (スコアカード記載順)</span>
+        </h2>
+        <div class="home-player-inputs" id="home-player-inputs">
+          <!-- JSで動的生成 -->
+        </div>
+      </div>
+
       <!-- スタートコース選択 -->
       <div class="section-card start-course-section">
         <h2 class="section-title">
@@ -636,7 +647,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260222c"></script>
+  <script src="app.js?v=20260222d"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {
