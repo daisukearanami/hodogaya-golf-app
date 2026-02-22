@@ -10,8 +10,8 @@
   
   <!-- PWA -->
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.svg">
+  <link rel="icon" type="image/svg+xml" sizes="192x192" href="icon-192.svg">
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -237,11 +237,12 @@
         </div>
 
         <div class="capture-actions">
-          <label class="btn-capture" for="file-input">
+          <label class="btn-capture" for="file-input-gallery">
             <i class="fas fa-image"></i>
             <span>写真を選択</span>
           </label>
-          <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none;" onchange="handleImageSelect(event)">
+          <input type="file" id="file-input-gallery" accept="image/*" style="display:none;" onchange="handleImageSelect(event)">
+          <input type="file" id="file-input-camera" accept="image/*" capture="environment" style="display:none;" onchange="handleImageSelect(event)">
           
           <button class="btn-capture-main" id="btn-take-photo" onclick="takePhoto()">
             <div class="shutter-btn">
