@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0c0b4d">
+  <title>程ヶ谷CC Game Tsuru Han</title>
+  
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Tesseract.js OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  
+  <link rel="stylesheet" href="style.css?v=20260228d">
+  <script>
+    window.onerror = function(msg, url, line, col, err) {
+      document.title = 'ERR: ' + msg;
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:red;color:white;padding:10px;font-size:14px;';
+      d.textContent = 'JS Error: ' + msg + ' (line ' + line + ')';
+      document.body && document.body.prepend(d);
+      console.error('GLOBAL ERROR:', msg, url, line, col, err);
+    };
+  </script>
+</head>
+<body>
+
+  <!-- ========== ヘッダー ========== -->
+  <header id="app-header">
+    <div class="header-inner">
+      <div class="header-logo">
+        <img src="https://www.hodogaya-country-club.jp/hodogayawp/wp-content/themes/hodogaya/images/f_logo.png" alt="程ヶ谷カントリー倶楽部" class="logo-img">
+      </div>
+      <div class="header-title">
+      </div>
+    </div>
+  </header>
+
+  <!-- ========== メインコンテンツ ========== -->
+  <main id="app-main">
+
+    <!-- ===== ホーム画面 ===== -->
+    <section id="page-home" class="page active">
+      <div class="hero-section">
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+          <h1 class="hero-title">
+            Game Tsuru Han
+            <span class="hero-subtitle">Game Tsuru Han</span>
+          </h1>
+          <p class="hero-description">
+            スコアカードを撮影するだけで<br>
+            ゲームの結果を自動計算
+          </p>
+        </div>
+      </div>
+
+      <!-- プレーヤー人数選択 -->
+      <div class="section-card player-count-section">
+        <h2 class="section-title">
+          プレーヤー人数
+          <span class="section-title-en">Number of Players</span>
+        </h2>
+        <div class="player-count-selector" id="player-count-selector">
+          <button class="count-btn" data-count="2" onclick="setPlayerCount(2)">
+            <i class="fas fa-user"></i><i class="fas fa-user"></i>
+            <span>2人</span>
+          </button>
+          <button class="count-btn" data-count="3" onclick="setPlayerCount(3)">
+            <i class="fas fa-user"></i><i class="fas fa-user"></i><i class="fas fa-user"></i>
+            <span>3人</span>
+          </button>
+          <button class="count-btn active" data-count="4" onclick="setPlayerCount(4)">
+            <i class="fas fa-user"></i><i class="fas fa-user"></i><i class="fas fa-user"></i><i class="fas fa-user"></i>
+            <span>4人</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- スタートコース選択 -->
+      <div class="section-card start-course-section">
+        <h2 class="section-title">
+          スタートコース
+          <span class="section-title-en">Starting Course</span>
+        </h2>
+        <div class="start-course-selector" id="start-course-selector">
+          <button class="start-course-btn active" data-course="OUT" onclick="setStartCourse('OUT')">
+            <i class="fas fa-flag"></i>
+            <span>OUTスタート</span>
+            <small>Hole 1 → 18</small>
+          </button>
+          <button class="start-course-btn" data-course="IN" onclick="setStartCourse('IN')">
+            <i class="fas fa-flag"></i>
+            <span>INスタート</span>
+            <small>Hole 10 → 9</small>
+          </button>
+        </div>
+      </div>
+
+      <!-- ゲーム種別選択 -->
+      <div class="section-card game-type-section">
+        <h2 class="section-title">
+          ゲーム種別
+          <span class="section-title-en">Game Type</span>
+        </h2>
+        <div class="game-type-options" id="game-type-options">
+          <!-- JSで動的生成 -->
+        </div>
+      </div>
+
+      <div class="home-actions">
+        <button class="btn-primary" onclick="navigateTo('page-capture')">
+          <i class="fas fa-camera"></i>
+          <span>スコアカードを撮影</span>
+        </button>
+        <button class="btn-secondary" onclick="navigateTo('page-manual')">
+          <i class="fas fa-edit"></i>
+          <span>スコアを手入力</span>
+        </button>
+      </div>
+
+      <!-- クイックアクセス -->
+      <div class="section-card">
+        <h2 class="section-title">
+          最近の記録
+          <span class="section-title-en">Recent Records</span>
+        </h2>
+        <div class="recent-list">
+          <div class="recent-item" onclick="navigateTo('page-result')">
+            <div class="recent-date">
+              <span class="date-month">2月</span>
+              <span class="date-day">15</span>
+            </div>
+            <div class="recent-info">
+              <div class="recent-players">山田、鈴木、田中、佐藤</div>
+              <div class="recent-course">OUT → IN</div>
+            </div>
+            <div class="recent-arrow"><i class="fas fa-chevron-right"></i></div>
+          </div>
+          <div class="recent-item">
+            <div class="recent-date">
+              <span class="date-month">2月</span>
+              <span class="date-day">8</span>
+            </div>
+            <div class="recent-info">
+              <div class="recent-players">山田、中村、高橋、伊藤</div>
+              <div class="recent-course">IN → OUT</div>
+            </div>
+            <div class="recent-arrow"><i class="fas fa-chevron-right"></i></div>
+          </div>
+          <div class="recent-item">
+            <div class="recent-date">
+              <span class="date-month">1月</span>
+              <span class="date-day">25</span>
+            </div>
+            <div class="recent-info">
+              <div class="recent-players">山田、小林、渡辺、加藤</div>
+              <div class="recent-course">OUT → IN</div>
+            </div>
+            <div class="recent-arrow"><i class="fas fa-chevron-right"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- コース情報 -->
+      <div class="section-card">
+        <h2 class="section-title">
+          コース情報
+          <span class="section-title-en">Course Info</span>
+        </h2>
+        <div class="course-info-grid">
+          <div class="course-info-item">
+            <div class="course-label">PAR</div>
+            <div class="course-value">72</div>
+            <div class="course-sub">18 Holes</div>
+          </div>
+          <div class="course-info-item">
+            <div class="course-label">OUT</div>
+            <div class="course-value">36</div>
+            <div class="course-sub">Hole 1-9</div>
+          </div>
+          <div class="course-info-item">
+            <div class="course-label">IN</div>
+            <div class="course-value">36</div>
+            <div class="course-sub">Hole 10-18</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 撮影画面 ===== -->
+    <section id="page-capture" class="page">
+      <div class="page-header">
+        <button class="btn-back" onclick="navigateTo('page-home')">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <h2 class="page-heading">スコアカード撮影</h2>
+        <div class="page-header-spacer"></div>
+      </div>
+
+      <div class="capture-container">
+        <div class="capture-guide">
+          <div class="guide-icon"><i class="fas fa-info-circle"></i></div>
+          <p>スコアカードがフレーム内に収まるように撮影してください。</p>
+        </div>
+
+        <!-- カメラプレビューエリア -->
+        <div class="camera-area" id="camera-area">
+          <div class="camera-placeholder">
+            <i class="fas fa-camera fa-3x"></i>
+            <p>タップしてカメラを起動</p>
+          </div>
+          <video id="camera-preview" autoplay playsinline style="display:none;"></video>
+          <canvas id="camera-canvas" style="display:none;"></canvas>
+          <img id="captured-image" style="display:none;">
+        </div>
+
+        <!-- スコアカードフレームガイド -->
+        <div class="capture-frame-hint">
+          <div class="frame-corner tl"></div>
+          <div class="frame-corner tr"></div>
+          <div class="frame-corner bl"></div>
+          <div class="frame-corner br"></div>
+        </div>
+
+        <div class="capture-actions">
+          <label class="btn-capture" for="file-input">
+            <i class="fas fa-image"></i>
+            <span>写真を選択</span>
+          </label>
+          <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none;" onchange="handleImageSelect(event)">
+          
+          <button class="btn-capture-main" id="btn-take-photo" onclick="takePhoto()">
+            <div class="shutter-btn">
+              <div class="shutter-inner"></div>
+            </div>
+          </button>
+
+          <button class="btn-capture" id="btn-retake" onclick="retakePhoto()" style="display:none;">
+            <i class="fas fa-redo"></i>
+            <span>撮り直し</span>
+          </button>
+        </div>
+
+        <button class="btn-primary btn-analyze" id="btn-analyze" onclick="analyzeScorecard()" style="display:none;">
+          <i class="fas fa-magic"></i>
+          <span>スコアを読み取る</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ===== 手動入力画面 ===== -->
+    <section id="page-manual" class="page">
+      <div class="page-header">
+        <button class="btn-back" onclick="navigateTo('page-home')">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <h2 class="page-heading">スコア入力</h2>
+        <div class="page-header-spacer"></div>
+      </div>
+
+      <div class="manual-container">
+        <!-- プレーヤー設定（動的生成） -->
+        <div class="input-section">
+          <h3 class="input-section-title">
+            <i class="fas fa-users"></i> プレーヤー <span class="player-count-badge" id="player-count-badge">4人</span>
+          </h3>
+          <div class="player-inputs" id="player-inputs">
+            <!-- JSで動的生成 -->
+          </div>
+        </div>
+
+        <!-- チーム分けプレビュー（4人団体戦時のみ表示） -->
+        <div class="input-section" id="team-preview-section" style="display:none;">
+          <h3 class="input-section-title">
+            <i class="fas fa-people-group"></i> 団体戦チーム分け
+          </h3>
+          <div id="team-preview"></div>
+        </div>
+
+        <!-- スコア入力テーブル（動的生成） -->
+        <div class="input-section">
+          <h3 class="input-section-title">
+            <i class="fas fa-golf-ball"></i> OUT (Hole 1-9)
+          </h3>
+          <div class="score-table-wrapper" id="score-table-out-wrapper">
+            <table class="score-table" id="score-table-out">
+              <thead>
+                <tr>
+                  <th class="th-hole">H</th>
+                  <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th>
+                  <th>6</th><th>7</th><th>8</th><th>9</th>
+                  <th class="th-total">計</th>
+                </tr>
+                <tr class="par-row">
+                  <td class="td-label">PAR</td>
+                  <td>4</td><td>5</td><td>3</td><td>4</td><td>4</td>
+                  <td>5</td><td>4</td><td>3</td><td>4</td>
+                  <td class="td-total">36</td>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="td-player">山田</td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td class="td-total">-</td>
+                </tr>
+                <tr>
+                  <td class="td-player">鈴木</td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td class="td-total">-</td>
+                </tr>
+                <tr>
+                  <td class="td-player">田中</td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td class="td-total">-</td>
+                </tr>
+                <tr>
+                  <td class="td-player">佐藤</td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td class="td-total">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="input-section">
+          <h3 class="input-section-title">
+            <i class="fas fa-golf-ball"></i> IN (Hole 10-18)
+          </h3>
+          <div class="score-table-wrapper" id="score-table-in-wrapper">
+            <table class="score-table" id="score-table-in">
+              <thead>
+                <tr>
+                  <th class="th-hole">H</th>
+                  <th>10</th><th>11</th><th>12</th><th>13</th><th>14</th>
+                  <th>15</th><th>16</th><th>17</th><th>18</th>
+                  <th class="th-total">計</th>
+                </tr>
+                <tr class="par-row">
+                  <td class="td-label">PAR</td>
+                  <td>4</td><td>4</td><td>3</td><td>5</td><td>4</td>
+                  <td>4</td><td>4</td><td>3</td><td>5</td>
+                  <td class="td-total">36</td>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="td-player">山田</td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td class="td-total">-</td>
+                </tr>
+                <tr>
+                  <td class="td-player">鈴木</td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td class="td-total">-</td>
+                </tr>
+                <tr>
+                  <td class="td-player">田中</td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td class="td-total">-</td>
+                </tr>
+                <tr>
+                  <td class="td-player">佐藤</td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td><input type="number" class="score-input" min="1" max="15"></td>
+                  <td class="td-total">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <button class="btn-primary btn-calculate" onclick="calculateAndShow()">
+          <i class="fas fa-calculator"></i>
+          <span>ゲームを計算する</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ===== 結果表示画面 ===== -->
+    <section id="page-result" class="page">
+      <div class="page-header">
+        <button class="btn-back" onclick="navigateTo('page-home')">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <h2 class="page-heading">計算結果</h2>
+        <div class="page-header-spacer"></div>
+      </div>
+
+      <div class="result-container">
+        <!-- 日付・コース -->
+        <div class="result-meta">
+          <div class="result-date">
+            <i class="far fa-calendar-alt"></i> 2026年2月22日（土）
+          </div>
+          <div class="result-course">程ヶ谷カントリー倶楽部　OUT → IN</div>
+        </div>
+
+        <!-- 総合スコアサマリー -->
+        <div class="result-summary">
+          <h3 class="result-section-title">
+            スコアサマリー
+            <span>Score Summary</span>
+          </h3>
+          <div class="summary-cards">
+            <div class="summary-card rank-1">
+              <div class="rank-badge">1st</div>
+              <div class="player-name">田中</div>
+              <div class="player-score">82</div>
+              <div class="player-detail">HDCP 8 / NET 74</div>
+            </div>
+            <div class="summary-card rank-2">
+              <div class="rank-badge">2nd</div>
+              <div class="player-name">山田</div>
+              <div class="player-score">88</div>
+              <div class="player-detail">HDCP 12 / NET 76</div>
+            </div>
+            <div class="summary-card rank-3">
+              <div class="rank-badge">3rd</div>
+              <div class="player-name">佐藤</div>
+              <div class="player-score">95</div>
+              <div class="player-detail">HDCP 15 / NET 80</div>
+            </div>
+            <div class="summary-card rank-4">
+              <div class="rank-badge">4th</div>
+              <div class="player-name">鈴木</div>
+              <div class="player-score">98</div>
+              <div class="player-detail">HDCP 18 / NET 80</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ゲーム結果（動的生成） -->
+        <div class="result-nigiri">
+          <h3 class="result-section-title">
+            ゲーム結果
+            <span>Game Result</span>
+          </h3>
+          <div id="game-results-container">
+            <!-- JSで動的生成 -->
+          </div>
+        </div>
+
+        <!-- ホール別詳細 -->
+        <div class="result-detail">
+          <h3 class="result-section-title">
+            ホール別詳細
+            <span>Hole by Hole</span>
+          </h3>
+          <div class="detail-toggle-group">
+            <button class="detail-toggle active" data-target="detail-out">OUT</button>
+            <button class="detail-toggle" data-target="detail-in">IN</button>
+          </div>
+          <div class="score-table-wrapper">
+            <table class="score-table result-score-table" id="detail-out">
+              <thead>
+                <tr>
+                  <th class="th-hole">H</th>
+                  <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th>
+                  <th>6</th><th>7</th><th>8</th><th>9</th>
+                  <th class="th-total">計</th>
+                </tr>
+                <tr class="par-row">
+                  <td class="td-label">PAR</td>
+                  <td>4</td><td>5</td><td>3</td><td>4</td><td>4</td>
+                  <td>5</td><td>4</td><td>3</td><td>4</td>
+                  <td class="td-total">36</td>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="td-player">山田</td>
+                  <td>5</td><td>6</td><td>4</td><td>5</td><td>5</td>
+                  <td>6</td><td>5</td><td>4</td><td>5</td>
+                  <td class="td-total">45</td>
+                </tr>
+                <tr>
+                  <td class="td-player">鈴木</td>
+                  <td>6</td><td>7</td><td>4</td><td>6</td><td>5</td>
+                  <td>7</td><td>6</td><td>5</td><td>6</td>
+                  <td class="td-total">52</td>
+                </tr>
+                <tr>
+                  <td class="td-player">田中</td>
+                  <td>4</td><td>6</td><td>3</td><td>5</td><td>4</td>
+                  <td>6</td><td>5</td><td>3</td><td>5</td>
+                  <td class="td-total">41</td>
+                </tr>
+                <tr>
+                  <td class="td-player">佐藤</td>
+                  <td>5</td><td>7</td><td>5</td><td>6</td><td>5</td>
+                  <td>6</td><td>5</td><td>4</td><td>6</td>
+                  <td class="td-total">49</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- アクションボタン -->
+        <div class="result-actions">
+          <button class="btn-secondary" onclick="shareResult()">
+            <i class="fas fa-share-alt"></i>
+            <span>結果をシェア</span>
+          </button>
+          <button class="btn-secondary" onclick="saveResult()">
+            <i class="fas fa-save"></i>
+            <span>保存する</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 読み取り中画面（モーダル） ===== -->
+    <div id="loading-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <div class="loading-animation">
+          <div class="loading-spinner"></div>
+          <div class="loading-golf-ball">
+            <i class="fas fa-golf-ball"></i>
+          </div>
+        </div>
+        <p class="loading-text" id="loading-text">スコアカードを読み取り中...</p>
+        <p class="loading-subtext" id="loading-subtext">しばらくお待ちください</p>
+        <div class="loading-progress">
+          <div class="loading-progress-bar"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========== フッターナビ ========== -->
+  <nav id="app-nav">
+    <button class="nav-item active" onclick="navigateTo('page-home')" data-page="page-home">
+      <i class="fas fa-home"></i>
+      <span>ホーム</span>
+    </button>
+    <button class="nav-item" onclick="navigateTo('page-capture')" data-page="page-capture">
+      <i class="fas fa-camera"></i>
+      <span>撮影</span>
+    </button>
+    <button class="nav-item" onclick="navigateTo('page-manual')" data-page="page-manual">
+      <i class="fas fa-edit"></i>
+      <span>入力</span>
+    </button>
+    <button class="nav-item" onclick="navigateTo('page-result')" data-page="page-result">
+      <i class="fas fa-chart-bar"></i>
+      <span>結果</span>
+    </button>
+  </nav>
+
+  <script src="app.js?v=20260228d"></script>
+  <script>
+    // Service Worker 登録
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').then(reg => {
+        console.log('SW registered:', reg.scope);
+      }).catch(err => {
+        console.warn('SW registration failed:', err);
+      });
+    }
+  </script>
+</body>
+</html>
