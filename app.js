@@ -6,6 +6,33 @@
 // =================== グローバル状態 ===================
 let playerCount = 4;
 let startCourse = 'IN'; // 'OUT' or 'IN'
+let selectedGreen = 'A'; // 'A' or 'B'
+let selectedTee = 'regular'; // 'back', 'regular', 'front', 'gold'
+
+// =================== ヤーデージデータ（程ヶ谷CC公式） ===================
+const YARD_DATA = {
+  A: {
+    back:    { out: [410,526,165,356,392,585,342,202,442], in: [442,360,176,502,436,348,382,188,544] },
+    regular: { out: [394,486,134,336,371,570,323,179,392], in: [403,351,152,476,405,323,367,176,499] },
+    front:   { out: [371,474,124,324,353,549,306,171,360], in: [391,341,137,456,390,310,357,157,479] },
+    gold:    { out: [311,398, 95,308,273,477,215,162,248], in: [354,257,129,378,332,274,269,142,441] }
+  },
+  B: {
+    back:    { out: [376,528,163,352,396,557,348,186,428], in: [431,373,177,506,406,353,349,188,530] },
+    regular: { out: [360,488,145,332,375,542,329,162,378], in: [392,364,153,480,375,328,334,175,485] },
+    front:   { out: [337,476,135,320,357,521,312,155,346], in: [380,354,139,460,360,315,324,156,465] },
+    gold:    { out: [277,400,105,304,277,449,221,145,234], in: [343,270,130,382,302,279,236,138,427] }
+  }
+};
+
+function getHoleYardage(holeNum) {
+  const data = YARD_DATA[selectedGreen]?.[selectedTee];
+  if (!data) return 0;
+  if (holeNum >= 1 && holeNum <= 9) return data.out[holeNum - 1];
+  if (holeNum >= 10 && holeNum <= 18) return data.in[holeNum - 10];
+  return 0;
+}
+
 const defaultPlayers = [
   { name: '荒濤', hdcp: 16 },
   { name: '佐久間', hdcp: 17 },
@@ -50,6 +77,35 @@ function setStartCourse(course) {
   document.querySelectorAll('.start-course-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.course === course);
   });
+}
+
+function setGreen(green) {
+  selectedGreen = green;
+  document.querySelectorAll('#green-selector .green-tee-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.green === green);
+  });
+  updateTeeTotalDisplay();
+}
+
+function setTee(tee) {
+  selectedTee = tee;
+  document.querySelectorAll('#tee-selector .green-tee-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tee === tee);
+  });
+  updateTeeTotalDisplay();
+}
+
+function updateTeeTotalDisplay() {
+  const el = document.getElementById('tee-total-display');
+  if (!el) return;
+  const data = YARD_DATA[selectedGreen]?.[selectedTee];
+  if (!data) { el.innerHTML = ''; return; }
+  const outTotal = data.out.reduce((s, v) => s + v, 0);
+  const inTotal = data.in.reduce((s, v) => s + v, 0);
+  const total = outTotal + inTotal;
+  const teeLabel = { back:'Back', regular:'Regular', front:'Front', gold:'Gold' }[selectedTee] || selectedTee;
+  el.innerHTML = `<span class="tee-total-tag">${selectedGreen}グリーン / ${teeLabel} Tee</span> ` +
+    `<span class="tee-total-yards">OUT ${outTotal.toLocaleString()}Y / IN ${inTotal.toLocaleString()}Y / TOTAL ${total.toLocaleString()}Y</span>`;
 }
 
 // =================== ゲーム種別の定義 ===================
@@ -2144,9 +2200,23 @@ let numpadTarget = null; // 現在選択中のinput要素
 let allScoreInputs = []; // 全スコア入力セルの配列
 
 function getAllScoreInputs() {
-  const outInputs = Array.from(document.querySelectorAll('#score-table-out .score-input'));
-  const inInputs = Array.from(document.querySelectorAll('#score-table-in .score-input'));
-  return [...outInputs, ...inInputs];
+  // ホール単位でプレーヤーを巡回する順序に並べ替え
+  // H1: P1→P2→P3→P4, H2: P1→P2→P3→P4, ... H9, then H10: P1→P2...
+  const result = [];
+  ['score-table-out', 'score-table-in'].forEach(tableId => {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    if (rows.length === 0) return;
+    const numHoles = 9;
+    for (let h = 0; h < numHoles; h++) {
+      for (let p = 0; p < rows.length; p++) {
+        const inputs = rows[p].querySelectorAll('.score-input');
+        if (inputs[h]) result.push(inputs[h]);
+      }
+    }
+  });
+  return result;
 }
 
 function getScoreInputInfo(input) {
@@ -2591,6 +2661,7 @@ function renderShotList() {
     let subText = '';
     if (isShot) {
       mainText = (s.club || '') + (s.distance ? ' ' + s.distance + 'yd' : '');
+      if (s.remaining) mainText += ' →残' + s.remaining + 'yd';
       if (s.bunker) mainText = '<i class="fas fa-mountain" style="color:#c8a04a;"></i> ' + mainText;
       const parts = [];
       if (s.direction && s.direction !== 'まっすぐ') parts.push(s.direction);
@@ -2643,9 +2714,24 @@ function openShotEntry(type) {
   document.querySelectorAll('.penalty-only-field').forEach(el => el.style.display = type === 'penalty' ? '' : 'none');
   
   // 距離フィールド: ペナルティでは非表示
-  const distField = document.getElementById('shot-distance-input');
-  const distParent = distField ? distField.closest('.shot-field') : null;
-  if (distParent) distParent.style.display = type === 'penalty' ? 'none' : '';
+  const distField = document.getElementById('shot-distance-field');
+  if (distField) distField.style.display = type === 'penalty' ? 'none' : '';
+  
+  // 残距離フィールド: ショットのみ表示
+  const remainGroup = document.getElementById('dist-remaining-group');
+  if (remainGroup) remainGroup.style.display = type === 'shot' ? '' : 'none';
+  
+  // ホールヤード情報
+  const yardInfo = document.getElementById('hole-yardage-info');
+  if (yardInfo) {
+    if (type === 'shot') {
+      const yd = getHoleYardage(currentShotHole);
+      yardInfo.textContent = yd > 0 ? `H${currentShotHole}: ${yd}yd (${selectedGreen}グリーン)` : '';
+      yardInfo.style.display = yd > 0 ? '' : 'none';
+    } else {
+      yardInfo.style.display = 'none';
+    }
+  }
   
   // パットの場合、既にパットがあればオン位置フィールドを非表示
   if (type === 'putt') {
@@ -2674,6 +2760,8 @@ function openShotEntry(type) {
 function resetShotForm() {
   const distInput = document.getElementById('shot-distance-input');
   if (distInput) distInput.value = '';
+  const remainInput = document.getElementById('shot-remaining-input');
+  if (remainInput) remainInput.value = '';
   document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.club-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.green-zone').forEach(b => b.classList.remove('active'));
@@ -2682,6 +2770,51 @@ function resetShotForm() {
   const bunkerBtn = document.getElementById('bunker-toggle');
   if (bunkerBtn) bunkerBtn.classList.remove('active');
 }
+
+// 距離 ↔ 残距離 自動逆算
+(function() {
+  let distCalcLock = false;
+  
+  document.addEventListener('input', function(e) {
+    if (distCalcLock) return;
+    if (currentShotEntryType !== 'shot') return;
+    
+    const distInput = document.getElementById('shot-distance-input');
+    const remainInput = document.getElementById('shot-remaining-input');
+    if (!distInput || !remainInput) return;
+    
+    const holeYd = getHoleYardage(currentShotHole);
+    if (holeYd <= 0) return;
+    
+    // 既に打ったショットの飛距離合計を計算（累積消費ヤード）
+    const shots = shotTrackerData[currentShotHole] || [];
+    let usedYards = 0;
+    shots.forEach(s => {
+      if (s.type === 'shot' && s.distance) usedYards += s.distance;
+    });
+    const effectiveTotal = holeYd - usedYards;
+    
+    distCalcLock = true;
+    if (e.target === distInput) {
+      const dist = parseInt(distInput.value);
+      if (!isNaN(dist) && dist >= 0) {
+        const remain = Math.max(0, effectiveTotal - dist);
+        remainInput.value = remain;
+      } else {
+        remainInput.value = '';
+      }
+    } else if (e.target === remainInput) {
+      const remain = parseInt(remainInput.value);
+      if (!isNaN(remain) && remain >= 0) {
+        const dist = Math.max(0, effectiveTotal - remain);
+        distInput.value = dist;
+      } else {
+        distInput.value = '';
+      }
+    }
+    distCalcLock = false;
+  });
+})();
 
 // Pill ボタン選択
 function selectPill(btn) {
@@ -2726,6 +2859,8 @@ function closeShotEntry() {
 function saveShotEntry() {
   const distInput = document.getElementById('shot-distance-input');
   const distance = distInput ? parseInt(distInput.value) || 0 : 0;
+  const remainInput = document.getElementById('shot-remaining-input');
+  const remaining = remainInput ? parseInt(remainInput.value) || 0 : 0;
   
   const entry = {
     type: currentShotEntryType,
@@ -2733,6 +2868,7 @@ function saveShotEntry() {
   };
   
   if (currentShotEntryType === 'shot') {
+    entry.remaining = remaining || null;
     // クラブ
     const activeClub = document.querySelector('.club-btn.active');
     entry.club = activeClub ? activeClub.dataset.val : null;
@@ -2804,6 +2940,7 @@ function exportShotData() {
         if (s.bunker) line += '[バンカー] ';
         if (s.club) line += s.club + ' ';
         if (s.distance) line += s.distance + 'yd ';
+        if (s.remaining) line += '→残' + s.remaining + 'yd ';
         if (s.direction) line += s.direction + ' ';
         if (s.quality && s.quality !== '普通') line += s.quality;
         text += line.trim() + '\n';
@@ -3075,6 +3212,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.start-course-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.course === 'IN');
     });
+
+    // グリーン/ティー初期表示更新
+    updateTeeTotalDisplay();
 
     // スコアカード読み取りデータを自動入力
     prefillScores();
