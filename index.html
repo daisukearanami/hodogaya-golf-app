@@ -121,6 +121,47 @@
         </div>
       </div>
 
+      <!-- グリーン選択 -->
+      <div class="section-card green-tee-section">
+        <h2 class="section-title">
+          グリーン / ティー
+          <span class="section-title-en">Green & Tee</span>
+        </h2>
+        <div class="green-tee-row">
+          <div class="green-tee-group">
+            <label class="green-tee-label">グリーン</label>
+            <div class="green-selector" id="green-selector">
+              <button class="green-tee-btn active" data-green="A" onclick="setGreen('A')">
+                <span>Aグリーン</span>
+              </button>
+              <button class="green-tee-btn" data-green="B" onclick="setGreen('B')">
+                <span>Bグリーン</span>
+              </button>
+            </div>
+          </div>
+          <div class="green-tee-group">
+            <label class="green-tee-label">ティー</label>
+            <div class="tee-selector" id="tee-selector">
+              <button class="green-tee-btn tee-back" data-tee="back" onclick="setTee('back')">
+                <span>Back</span>
+              </button>
+              <button class="green-tee-btn tee-regular active" data-tee="regular" onclick="setTee('regular')">
+                <span>Regular</span>
+              </button>
+              <button class="green-tee-btn tee-front" data-tee="front" onclick="setTee('front')">
+                <span>Front</span>
+              </button>
+              <button class="green-tee-btn tee-gold" data-tee="gold" onclick="setTee('gold')">
+                <span>Gold</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="tee-total-display" id="tee-total-display">
+          <!-- JSで動的更新 -->
+        </div>
+      </div>
+
       <!-- ゲーム種別選択 -->
       <div class="section-card game-type-section">
         <h2 class="section-title">
@@ -578,12 +619,21 @@
             </div>
 
             <!-- 距離入力 -->
-            <div class="shot-field">
+            <div class="shot-field" id="shot-distance-field">
               <label class="shot-field-label" id="shot-distance-label">距離 (yd)</label>
               <div class="shot-distance-row">
-                <input type="number" id="shot-distance-input" placeholder="0" min="0" max="999" class="shot-distance-big-input" inputmode="numeric" pattern="[0-9]*">
-                <span class="shot-distance-unit" id="shot-distance-unit">yd</span>
+                <div class="dist-input-group">
+                  <span class="dist-label-small">飛距離</span>
+                  <input type="number" id="shot-distance-input" placeholder="0" min="0" max="999" class="shot-distance-big-input" inputmode="numeric" pattern="[0-9]*">
+                  <span class="shot-distance-unit" id="shot-distance-unit">yd</span>
+                </div>
+                <div class="dist-input-group dist-remaining-group" id="dist-remaining-group">
+                  <span class="dist-label-small">残距離</span>
+                  <input type="number" id="shot-remaining-input" placeholder="0" min="0" max="999" class="shot-distance-big-input remaining-input" inputmode="numeric" pattern="[0-9]*">
+                  <span class="shot-distance-unit">yd</span>
+                </div>
               </div>
+              <div class="hole-yardage-info" id="hole-yardage-info"></div>
             </div>
 
             <!-- ショット用: クラブ選択 -->
@@ -860,7 +910,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260222m"></script>
+  <script src="app.js?v=20260222n"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {
