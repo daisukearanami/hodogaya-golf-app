@@ -753,29 +753,9 @@
             <span>Score Summary</span>
           </h3>
           <div class="summary-cards">
-            <div class="summary-card rank-1">
-              <div class="rank-badge">1st</div>
-              <div class="player-name">田中</div>
-              <div class="player-score">82</div>
-              <div class="player-detail">HDCP 8 / NET 74</div>
-            </div>
-            <div class="summary-card rank-2">
-              <div class="rank-badge">2nd</div>
-              <div class="player-name">山田</div>
-              <div class="player-score">88</div>
-              <div class="player-detail">HDCP 12 / NET 76</div>
-            </div>
-            <div class="summary-card rank-3">
-              <div class="rank-badge">3rd</div>
-              <div class="player-name">佐藤</div>
-              <div class="player-score">95</div>
-              <div class="player-detail">HDCP 15 / NET 80</div>
-            </div>
-            <div class="summary-card rank-4">
-              <div class="rank-badge">4th</div>
-              <div class="player-name">鈴木</div>
-              <div class="player-score">98</div>
-              <div class="player-detail">HDCP 18 / NET 80</div>
+            <div class="stats-no-data" style="padding:20px; text-align:center; color:#999;">
+              <i class="fas fa-calculator" style="font-size:24px; display:block; margin-bottom:8px;"></i>
+              スコアを入力して「計算する」を押してください
             </div>
           </div>
         </div>
@@ -818,30 +798,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td class="td-player">山田</td>
-                  <td>5</td><td>6</td><td>4</td><td>5</td><td>5</td>
-                  <td>6</td><td>5</td><td>4</td><td>5</td>
-                  <td class="td-total">45</td>
-                </tr>
-                <tr>
-                  <td class="td-player">鈴木</td>
-                  <td>6</td><td>7</td><td>4</td><td>6</td><td>5</td>
-                  <td>7</td><td>6</td><td>5</td><td>6</td>
-                  <td class="td-total">52</td>
-                </tr>
-                <tr>
-                  <td class="td-player">田中</td>
-                  <td>4</td><td>6</td><td>3</td><td>5</td><td>4</td>
-                  <td>6</td><td>5</td><td>3</td><td>5</td>
-                  <td class="td-total">41</td>
-                </tr>
-                <tr>
-                  <td class="td-player">佐藤</td>
-                  <td>5</td><td>7</td><td>5</td><td>6</td><td>5</td>
-                  <td>6</td><td>5</td><td>4</td><td>6</td>
-                  <td class="td-total">49</td>
-                </tr>
+                <!-- JSで動的生成 -->
               </tbody>
             </table>
           </div>
@@ -903,7 +860,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260222l"></script>
+  <script src="app.js?v=20260222m"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {
