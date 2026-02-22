@@ -1672,11 +1672,29 @@ async function analyzeScorecard() {
     const filledCount = ocrScores ? ocrScores.filledCount : 0;
     const totalCells = playerCount * 18;
     const ocrText = result.data.text || '';
-    if (filledCount === 0) {
-      // デバッグ情報をトーストで表示
+
+    // デバッグ表示
+    const debugSection = document.getElementById('ocr-debug-section');
+    const debugText = document.getElementById('ocr-debug-text');
+    if (debugSection && debugText) {
+      debugSection.style.display = 'block';
       const wordCount = result.data.words ? result.data.words.length : 0;
-      const textPreview = ocrText.substring(0, 60).replace(/\n/g, ' ');
-      showToast('読取0件。OCR検出=' + wordCount + '語。テキスト: ' + textPreview + '... 手入力で修正してください。', 8000);
+      let debugInfo = '=== OCR結果 (' + wordCount + '語検出) ===\n';
+      debugInfo += '--- テキスト ---\n' + ocrText + '\n';
+      debugInfo += '--- パース結果 (' + filledCount + '/' + totalCells + ') ---\n';
+      if (ocrScores) {
+        for (let h = 1; h <= 18; h++) {
+          const half = h <= 9 ? 'out' : 'in';
+          const hIdx = h <= 9 ? h - 1 : h - 10;
+          const scores = ocrScores[half].map(p => p[hIdx]);
+          debugInfo += 'H' + h + ': ' + scores.map(s => s != null ? s : '-').join(', ') + '\n';
+        }
+      }
+      debugText.textContent = debugInfo;
+    }
+
+    if (filledCount === 0) {
+      showToast('読取0件。デバッグ情報を確認してください。', 8000);
     } else {
       showToast(filledCount + '/' + totalCells + ' セルを読み取りました。間違いを修正してください');
     }
@@ -1703,59 +1721,145 @@ async function analyzeScorecard() {
 function parseOcrToScores(data) {
   if (!data) return null;
 
-  // 方法1: words（位置情報付き）でパース
-  let result = parseByWords(data);
+  // 方法1: テキスト行ベースでパース（程ヶ谷スコアカード専用）
+  let result = parseHodogayaText(data.text);
   if (result && result.filledCount > 0) return result;
 
-  // 方法2: テキスト行ベースでパース（フォールバック）
-  result = parseByText(data.text);
+  // 方法2: words位置ベースでパース（フォールバック）
+  result = parseHodogayaWords(data);
   if (result && result.filledCount > 0) return result;
 
   return null;
 }
 
-// --- 方法1: words の位置情報からスコア行を抽出 ---
-function parseByWords(data) {
+// 程ヶ谷CCスコアカードのレイアウト:
+// 各行: ホール番号, 距離x4(Black/Regular/Front/Gold), PAR, スコア1, スコア2, HDCP, スコア3, スコア4, (空欄)
+// 既知のPAR値とHDCP値を使って列の位置を特定する
+
+const HODOGAYA_PAR = {
+  1:4, 2:5, 3:3, 4:4, 5:4, 6:5, 7:4, 8:3, 9:4,
+  10:4, 11:4, 12:3, 13:5, 14:4, 15:4, 16:4, 17:3, 18:5
+};
+const HODOGAYA_HDCP = {
+  1:5, 2:7, 3:17, 4:11, 5:13, 6:1, 7:15, 8:9, 9:3,
+  10:8, 11:4, 12:18, 13:16, 14:2, 15:12, 16:6, 17:14, 18:10
+};
+
+// --- 方法1: テキスト行ベース ---
+function parseHodogayaText(text) {
+  if (!text || text.trim().length === 0) return null;
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const holeScores = {};
+
+  for (const line of lines) {
+    // 行から全ての数字トークンを抽出（位置順）
+    const tokens = [];
+    const regex = /\d+/g;
+    let m;
+    while ((m = regex.exec(line)) !== null) {
+      tokens.push(parseInt(m[0]));
+    }
+
+    if (tokens.length < 7) continue; // 最低: hole + 4距離 + par + 1スコア
+
+    // 先頭がホール番号(1-18)か?
+    const holeNum = tokens[0];
+    if (holeNum < 1 || holeNum > 18) continue;
+
+    const expectedPar = HODOGAYA_PAR[holeNum];
+    const expectedHdcp = HODOGAYA_HDCP[holeNum];
+
+    // 距離値をスキップ: 3桁(100-600)の数字を飛ばす
+    // PAR値(3,4,5)を見つける
+    let parIdx = -1;
+    for (let i = 1; i < tokens.length; i++) {
+      if (tokens[i] === expectedPar) {
+        // 距離だった可能性を排除: PAR前の値は通常3桁
+        // PAR値は小さい数字(3,4,5)なので、前が大きい数字の後にあるはず
+        parIdx = i;
+        break;
+      }
+    }
+
+    if (parIdx === -1) {
+      // PARが見つからない場合: 距離(3桁)の後の最初の3,4,5をPARとみなす
+      for (let i = 1; i < tokens.length; i++) {
+        if (tokens[i] >= 3 && tokens[i] <= 5 && (i === 1 || tokens[i-1] >= 100)) {
+          parIdx = i;
+          break;
+        }
+      }
+    }
+
+    if (parIdx === -1 || parIdx + 1 >= tokens.length) continue;
+
+    // PAR以降の数字を取得
+    const afterPar = tokens.slice(parIdx + 1);
+
+    // HDCP位置を探す: afterParの中でexpectedHdcpと一致する値
+    let hdcpIdx = -1;
+    for (let i = 0; i < afterPar.length; i++) {
+      if (afterPar[i] === expectedHdcp) {
+        // スコアは通常2-12の範囲。HDCPは1-18。
+        // スコア2つの後にHDCPが来るはず（index 2）
+        if (i >= 1 && i <= 3) {
+          hdcpIdx = i;
+          break;
+        }
+      }
+    }
+
+    // スコアを抽出
+    let scores = [];
+    if (hdcpIdx >= 0) {
+      // HDCP前: スコア1, スコア2
+      const beforeHdcp = afterPar.slice(0, hdcpIdx).filter(n => n >= 1 && n <= 15);
+      // HDCP後: スコア3, スコア4
+      const afterHdcp = afterPar.slice(hdcpIdx + 1).filter(n => n >= 1 && n <= 15);
+      scores = [...beforeHdcp, ...afterHdcp];
+    } else {
+      // HDCPが見つからない場合: PAR後の2-15の数字をスコアとして取得
+      scores = afterPar.filter(n => n >= 1 && n <= 15);
+    }
+
+    // playerCount分まで
+    if (scores.length > playerCount) {
+      scores = scores.slice(0, playerCount);
+    }
+
+    if (scores.length >= 1) {
+      holeScores[holeNum] = scores;
+    }
+  }
+
+  return buildScoreResult(holeScores);
+}
+
+// --- 方法2: words位置ベース ---
+function parseHodogayaWords(data) {
   if (!data.words || data.words.length === 0) return null;
 
-  // 全ワードから数字を抽出（1-3桁）
+  // 全ワードから数字を抽出
   const nums = [];
   for (let i = 0; i < data.words.length; i++) {
     const w = data.words[i];
     const text = w.text.replace(/[^0-9]/g, '');
     if (!text) continue;
-    // 複数桁がくっついている場合も個別に分解を試みる
-    if (text.length <= 2) {
-      const val = parseInt(text);
-      if (val >= 1 && val <= 99) {
-        nums.push({
-          val: val,
-          x: (w.bbox.x0 + w.bbox.x1) / 2,
-          y: (w.bbox.y0 + w.bbox.y1) / 2,
-        });
-      }
-    } else {
-      // 3桁以上: 1桁ずつ分解（セルが結合認識された場合）
-      const charWidth = (w.bbox.x1 - w.bbox.x0) / text.length;
-      for (let c = 0; c < text.length; c++) {
-        const val = parseInt(text[c]);
-        if (val >= 1 && val <= 9) {
-          nums.push({
-            val: val,
-            x: w.bbox.x0 + charWidth * (c + 0.5),
-            y: (w.bbox.y0 + w.bbox.y1) / 2,
-          });
-        }
-      }
+    const val = parseInt(text);
+    if (val >= 1 && val <= 999) {
+      nums.push({
+        val: val,
+        x: (w.bbox.x0 + w.bbox.x1) / 2,
+        y: (w.bbox.y0 + w.bbox.y1) / 2,
+      });
     }
   }
 
-  if (nums.length < 8) return null;
+  if (nums.length < 10) return null;
 
   const maxY = Math.max(...nums.map(n => n.y));
-
-  // Y座標でクラスタリング（行検出）
-  const rows = clusterByY(nums, maxY * 0.03);
+  const rows = clusterByY(nums, maxY * 0.025);
 
   rows.forEach(row => row.sort((a, b) => a.x - b.x));
   rows.sort((a, b) => {
@@ -1764,75 +1868,62 @@ function parseByWords(data) {
     return ay - by;
   });
 
-  const knownPars = {
-    1:4, 2:5, 3:3, 4:4, 5:4, 6:5, 7:4, 8:3, 9:4,
-    10:4, 11:4, 12:3, 13:5, 14:4, 15:4, 16:4, 17:3, 18:5
-  };
-
   const holeScores = {};
 
   for (const row of rows) {
-    if (row.length < 2) continue;
+    if (row.length < 7) continue;
 
-    // スコア候補（2〜15の数字）
-    const scoreCandidates = row.filter(n => n.val >= 2 && n.val <= 12);
-    if (scoreCandidates.length < 2) continue;
-
-    // ホール番号を推定: 行の左端の値が1-18
-    const firstNum = row[0];
-    const holeNum = firstNum.val;
+    const holeNum = row[0].val;
     if (holeNum < 1 || holeNum > 18) continue;
 
-    // ホール番号より右のスコア候補
-    let candidates = scoreCandidates.filter(n => n.x > firstNum.x + 5);
+    const expectedPar = HODOGAYA_PAR[holeNum];
+    const expectedHdcp = HODOGAYA_HDCP[holeNum];
 
-    // 末尾playerCount個を取得（右側にスコアがある前提）
-    if (candidates.length > playerCount) {
-      candidates = candidates.slice(candidates.length - playerCount);
+    // PAR列を探す: 距離(>=100)をスキップした後の3,4,5
+    let parIdx = -1;
+    for (let i = 1; i < row.length; i++) {
+      if (row[i].val === expectedPar && (i === 1 || row[i-1].val >= 100)) {
+        parIdx = i;
+        break;
+      }
     }
-
-    if (candidates.length >= 1) {
-      holeScores[holeNum] = candidates.map(c => c.val);
-    }
-  }
-
-  return buildScoreResult(holeScores);
-}
-
-// --- 方法2: テキスト行ベースでパース ---
-function parseByText(text) {
-  if (!text || text.trim().length === 0) return null;
-
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  const holeScores = {};
-
-  for (const line of lines) {
-    // 行から数字を全て抽出
-    const numbers = [];
-    const matches = line.matchAll(/\d+/g);
-    for (const m of matches) {
-      const val = parseInt(m[0]);
-      // 1-2桁の数字のみ（距離やその他の大きな数字を除外）
-      if (val >= 1 && val <= 99 && m[0].length <= 2) {
-        numbers.push(val);
+    // フォールバック: 最初の非距離の3,4,5
+    if (parIdx === -1) {
+      for (let i = 1; i < row.length; i++) {
+        if (row[i].val >= 3 && row[i].val <= 5 && row[i].val < 100) {
+          parIdx = i;
+          break;
+        }
       }
     }
 
-    if (numbers.length < 3) continue;
+    if (parIdx === -1 || parIdx + 1 >= row.length) continue;
 
-    // 先頭がホール番号(1-18)か?
-    const holeNum = numbers[0];
-    if (holeNum < 1 || holeNum > 18) continue;
+    const afterPar = row.slice(parIdx + 1);
 
-    // 残りからスコア候補(2-12)を抽出
-    const rest = numbers.slice(1);
-    const scoreCandidates = rest.filter(n => n >= 2 && n <= 12);
+    // HDCP位置を探す
+    let hdcpIdx = -1;
+    for (let i = 0; i < afterPar.length; i++) {
+      if (afterPar[i].val === expectedHdcp && i >= 1 && i <= 3) {
+        hdcpIdx = i;
+        break;
+      }
+    }
 
-    if (scoreCandidates.length >= 1) {
-      // 最後のplayerCount個をスコアとして取得
-      const scores = scoreCandidates.length > playerCount
-        ? scoreCandidates.slice(scoreCandidates.length - playerCount)
-        : scoreCandidates;
+    let scores = [];
+    if (hdcpIdx >= 0) {
+      const beforeHdcp = afterPar.slice(0, hdcpIdx).filter(n => n.val >= 1 && n.val <= 15).map(n => n.val);
+      const afterHdcp = afterPar.slice(hdcpIdx + 1).filter(n => n.val >= 1 && n.val <= 15).map(n => n.val);
+      scores = [...beforeHdcp, ...afterHdcp];
+    } else {
+      scores = afterPar.filter(n => n.val >= 1 && n.val <= 15).map(n => n.val);
+    }
+
+    if (scores.length > playerCount) {
+      scores = scores.slice(0, playerCount);
+    }
+
+    if (scores.length >= 1) {
       holeScores[holeNum] = scores;
     }
   }
