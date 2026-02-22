@@ -311,6 +311,15 @@
           <div id="team-preview"></div>
         </div>
 
+        <!-- スコア入力ボタン -->
+        <div style="text-align:center; margin-bottom:12px;">
+          <button class="btn-primary" onclick="startScoreEntry()" style="max-width:320px; margin:0 auto;">
+            <i class="fas fa-th"></i>
+            <span>スコアを入力する</span>
+          </button>
+          <p style="font-size:12px; color:#666; margin-top:6px;">テーブルのセルを直接タップしても入力できます</p>
+        </div>
+
         <!-- スコア入力テーブル（動的生成） -->
         <div class="input-section">
           <h3 class="input-section-title">
@@ -472,6 +481,249 @@
           <i class="fas fa-calculator"></i>
           <span>ゲームを計算する</span>
         </button>
+      </div>
+
+      <!-- スコア入力ナンバーパッド -->
+      <div id="score-numpad" class="score-numpad" style="display:none;">
+        <div class="numpad-backdrop" onclick="closeNumpad()"></div>
+        <div class="numpad-sheet">
+          <div class="numpad-header">
+            <span class="numpad-info" id="numpad-info">H1 - P1</span>
+            <span class="numpad-par" id="numpad-par">PAR 4</span>
+            <button class="numpad-close" onclick="closeNumpad()"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="numpad-grid">
+            <button class="numpad-btn" data-val="1">1</button>
+            <button class="numpad-btn" data-val="2">2</button>
+            <button class="numpad-btn" data-val="3">3</button>
+            <button class="numpad-btn" data-val="4">4</button>
+            <button class="numpad-btn" data-val="5">5</button>
+            <button class="numpad-btn" data-val="6">6</button>
+            <button class="numpad-btn" data-val="7">7</button>
+            <button class="numpad-btn" data-val="8">8</button>
+            <button class="numpad-btn" data-val="9">9</button>
+            <button class="numpad-btn numpad-clear" data-val="clear"><i class="fas fa-backspace"></i></button>
+            <button class="numpad-btn numpad-10plus" data-val="10+">10+</button>
+            <button class="numpad-btn numpad-next" data-val="next"><i class="fas fa-arrow-right"></i></button>
+          </div>
+          <div class="numpad-10plus-input" id="numpad-10plus-row" style="display:none;">
+            <input type="number" id="numpad-custom-input" class="numpad-custom" min="10" max="20" placeholder="10~">
+            <button class="numpad-confirm" onclick="confirmCustomScore()">OK</button>
+          </div>
+          <div class="numpad-nav">
+            <button class="numpad-nav-btn" onclick="numpadPrev()"><i class="fas fa-chevron-left"></i> 前</button>
+            <span class="numpad-progress" id="numpad-progress">1/36</span>
+            <button class="numpad-nav-btn" onclick="numpadNext()">次 <i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ショット記録画面 ===== -->
+    <section id="page-shot-tracker" class="page">
+      <div class="page-header">
+        <button class="btn-back" onclick="navigateTo('page-home')">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <h2 class="page-heading">ショット記録</h2>
+        <div class="page-header-spacer"></div>
+      </div>
+
+      <div class="shot-tracker-container">
+        <!-- ホール選択タブ -->
+        <div class="hole-tabs-wrapper">
+          <div class="hole-tabs" id="hole-tabs">
+            <!-- JSで動的生成 -->
+          </div>
+        </div>
+
+        <!-- 現在のホール情報 -->
+        <div class="current-hole-info" id="current-hole-info">
+          <span class="hole-number-badge" id="hole-number-badge">H1</span>
+          <span class="hole-par-badge" id="hole-par-badge">PAR 4</span>
+          <span class="hole-dist-badge" id="hole-dist-badge"></span>
+        </div>
+
+        <!-- 打数アラート -->
+        <div class="score-mismatch-alert" id="score-mismatch-alert" style="display:none;">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span id="score-mismatch-text"></span>
+        </div>
+
+        <!-- ショット記録リスト -->
+        <div class="shot-list" id="shot-list">
+          <!-- JSで動的生成 -->
+        </div>
+
+        <!-- ショット追加ボタン群 -->
+        <div class="shot-add-buttons">
+          <button class="btn-add-shot" onclick="openShotEntry('shot')">
+            <i class="fas fa-golf-ball"></i> ショット追加
+          </button>
+          <button class="btn-add-penalty" onclick="openShotEntry('penalty')">
+            <i class="fas fa-exclamation-circle"></i> OB/池
+          </button>
+          <button class="btn-add-putt" onclick="openShotEntry('putt')">
+            <i class="fas fa-flag"></i> パット追加
+          </button>
+        </div>
+
+        <!-- ショット入力フォーム（ボトムシート） -->
+        <div class="shot-entry-overlay" id="shot-entry-overlay" style="display:none;">
+          <div class="shot-entry-backdrop" onclick="closeShotEntry()"></div>
+          <div class="shot-entry-sheet">
+            <div class="shot-entry-header">
+              <span class="shot-entry-title" id="shot-entry-title">ショット追加</span>
+              <button class="shot-entry-close" onclick="closeShotEntry()"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- 距離入力 -->
+            <div class="shot-field">
+              <label class="shot-field-label" id="shot-distance-label">距離 (yd)</label>
+              <div class="shot-distance-row">
+                <input type="number" id="shot-distance-input" placeholder="0" min="0" max="999" class="shot-distance-big-input" inputmode="numeric" pattern="[0-9]*">
+                <span class="shot-distance-unit" id="shot-distance-unit">yd</span>
+              </div>
+            </div>
+
+            <!-- ショット用: クラブ選択 -->
+            <div class="shot-field shot-only-field" id="shot-club-field">
+              <label class="shot-field-label">クラブ</label>
+              <div class="club-selector" id="club-selector">
+                <div class="club-row">
+                  <button class="club-btn" data-val="1W" onclick="selectClub(this)">1W</button>
+                  <button class="club-btn" data-val="3W" onclick="selectClub(this)">3W</button>
+                  <button class="club-btn" data-val="5W" onclick="selectClub(this)">5W</button>
+                  <button class="club-btn" data-val="4U" onclick="selectClub(this)">4U</button>
+                  <button class="club-btn" data-val="5U" onclick="selectClub(this)">5U</button>
+                </div>
+                <div class="club-row">
+                  <button class="club-btn" data-val="5I" onclick="selectClub(this)">5I</button>
+                  <button class="club-btn" data-val="6I" onclick="selectClub(this)">6I</button>
+                  <button class="club-btn" data-val="7I" onclick="selectClub(this)">7I</button>
+                  <button class="club-btn" data-val="8I" onclick="selectClub(this)">8I</button>
+                  <button class="club-btn" data-val="9I" onclick="selectClub(this)">9I</button>
+                </div>
+                <div class="club-row">
+                  <button class="club-btn" data-val="PW" onclick="selectClub(this)">PW</button>
+                  <button class="club-btn" data-val="52°" onclick="selectClub(this)">52°</button>
+                  <button class="club-btn" data-val="58°" onclick="selectClub(this)">58°</button>
+                  <button class="club-btn" data-val="PT" onclick="selectClub(this)">PT</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ショット用: バンカー -->
+            <div class="shot-field shot-only-field" id="shot-bunker-field">
+              <div class="toggle-row">
+                <button class="toggle-btn" id="bunker-toggle" onclick="toggleBunker()">
+                  <i class="fas fa-mountain"></i> バンカーショット
+                </button>
+              </div>
+            </div>
+
+            <!-- ショット用: 方向 -->
+            <div class="shot-field shot-only-field" id="shot-direction-field">
+              <label class="shot-field-label">方向</label>
+              <div class="pill-selector" id="shot-direction-pills">
+                <button class="pill-btn" data-val="大きく左" onclick="selectPill(this)">大左</button>
+                <button class="pill-btn" data-val="やや左" onclick="selectPill(this)">やや左</button>
+                <button class="pill-btn pill-center" data-val="まっすぐ" onclick="selectPill(this)">まっすぐ</button>
+                <button class="pill-btn" data-val="やや右" onclick="selectPill(this)">やや右</button>
+                <button class="pill-btn" data-val="大きく右" onclick="selectPill(this)">大右</button>
+              </div>
+            </div>
+
+            <!-- ショット用: トップ・ダフリ -->
+            <div class="shot-field shot-only-field" id="shot-quality-field">
+              <label class="shot-field-label">打球</label>
+              <div class="pill-selector" id="shot-quality-pills">
+                <button class="pill-btn" data-val="大きくダフリ" onclick="selectPill(this)">大ダフ</button>
+                <button class="pill-btn" data-val="ややダフリ" onclick="selectPill(this)">ややダフ</button>
+                <button class="pill-btn pill-center" data-val="普通" onclick="selectPill(this)">普通</button>
+                <button class="pill-btn" data-val="ややトップ" onclick="selectPill(this)">ややトップ</button>
+                <button class="pill-btn" data-val="大きくトップ" onclick="selectPill(this)">大トップ</button>
+              </div>
+            </div>
+
+            <!-- パット用: オン位置 -->
+            <div class="shot-field putt-only-field" id="putt-green-field" style="display:none;">
+              <label class="shot-field-label">オン位置</label>
+              <div class="green-position-wrapper">
+                <div class="green-circle" id="green-circle">
+                  <div class="green-label green-label-top">奥</div>
+                  <div class="green-label green-label-bottom">手前</div>
+                  <div class="green-label green-label-left">左</div>
+                  <div class="green-label green-label-right">右</div>
+                  <div class="green-flag"><i class="fas fa-flag"></i></div>
+                  <div class="green-grid">
+                    <button class="green-zone" data-zone="奥左" onclick="selectGreenZone(this)"></button>
+                    <button class="green-zone" data-zone="奥中" onclick="selectGreenZone(this)"></button>
+                    <button class="green-zone" data-zone="奥右" onclick="selectGreenZone(this)"></button>
+                    <button class="green-zone" data-zone="中左" onclick="selectGreenZone(this)"></button>
+                    <button class="green-zone" data-zone="中中" onclick="selectGreenZone(this)"></button>
+                    <button class="green-zone" data-zone="中右" onclick="selectGreenZone(this)"></button>
+                    <button class="green-zone" data-zone="前左" onclick="selectGreenZone(this)"></button>
+                    <button class="green-zone" data-zone="前中" onclick="selectGreenZone(this)"></button>
+                    <button class="green-zone" data-zone="前右" onclick="selectGreenZone(this)"></button>
+                  </div>
+                </div>
+                <div class="green-selected" id="green-selected-label"></div>
+              </div>
+            </div>
+
+            <!-- パット用: 結果 -->
+            <div class="shot-field putt-only-field" id="putt-result-field" style="display:none;">
+              <label class="shot-field-label">結果</label>
+              <div class="pill-selector" id="putt-result-pills">
+                <button class="pill-btn pill-success" data-val="入った" onclick="selectPill(this)"><i class="fas fa-check-circle"></i> 入った</button>
+                <button class="pill-btn" data-val="左外し" onclick="selectPill(this)">左外し</button>
+                <button class="pill-btn" data-val="右外し" onclick="selectPill(this)">右外し</button>
+                <button class="pill-btn" data-val="ショート" onclick="selectPill(this)">ショート</button>
+                <button class="pill-btn" data-val="オーバー" onclick="selectPill(this)">オーバー</button>
+              </div>
+            </div>
+
+            <!-- ペナルティ用: 種類 -->
+            <div class="shot-field penalty-only-field" id="penalty-type-field" style="display:none;">
+              <label class="shot-field-label">ペナルティ種類</label>
+              <div class="pill-selector" id="penalty-type-pills">
+                <button class="pill-btn pill-ob" data-val="OB" onclick="selectPill(this)"><i class="fas fa-ban"></i> OB</button>
+                <button class="pill-btn pill-water" data-val="池ポチャ" onclick="selectPill(this)"><i class="fas fa-water"></i> 池ポチャ</button>
+              </div>
+            </div>
+
+            <!-- 保存ボタン -->
+            <div class="shot-entry-actions">
+              <button class="btn-save-shot" id="btn-save-shot" onclick="saveShotEntry()">
+                <i class="fas fa-plus-circle"></i> 記録する
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 集計ボタン -->
+        <div style="margin-top:16px;">
+          <button class="btn-primary" onclick="showShotStats()" style="width:100%;">
+            <i class="fas fa-chart-pie"></i>
+            <span>集計を見る</span>
+          </button>
+        </div>
+
+        <!-- 集計結果 -->
+        <div class="shot-stats-container" id="shot-stats-container" style="display:none;">
+          <!-- JSで動的生成 -->
+        </div>
+
+        <!-- データ操作 -->
+        <div class="shot-data-actions">
+          <button class="btn-secondary btn-small" onclick="exportShotData()">
+            <i class="fas fa-share-alt"></i> データをシェア
+          </button>
+          <button class="btn-secondary btn-small btn-danger-outline" onclick="clearShotData()">
+            <i class="fas fa-trash-alt"></i> リセット
+          </button>
+        </div>
       </div>
     </section>
 
@@ -641,13 +893,17 @@
       <i class="fas fa-edit"></i>
       <span>入力</span>
     </button>
+    <button class="nav-item" onclick="navigateTo('page-shot-tracker')" data-page="page-shot-tracker">
+      <i class="fas fa-crosshairs"></i>
+      <span>記録</span>
+    </button>
     <button class="nav-item" onclick="navigateTo('page-result')" data-page="page-result">
       <i class="fas fa-chart-bar"></i>
       <span>結果</span>
     </button>
   </nav>
 
-  <script src="app.js?v=20260222d"></script>
+  <script src="app.js?v=20260222l"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {
