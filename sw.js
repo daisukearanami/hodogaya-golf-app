@@ -1,12 +1,12 @@
 // Service Worker for 程ヶ谷CC Game Tsuru Han
-const CACHE_NAME = 'hodogaya-v1';
+const CACHE_NAME = 'hodogaya-v2';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
-  './icon-192.png',
-  './icon-512.png',
+  './icon-192.svg',
+  './icon-512.svg',
   'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@400;600;700&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
 ];
