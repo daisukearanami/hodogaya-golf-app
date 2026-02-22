@@ -1550,7 +1550,7 @@ function retakePhoto() {
 
 // =================== 画像リサイズ（iOS対応） ===================
 function resizeImageForOCR(img, maxDim) {
-  maxDim = maxDim || 1600;
+  maxDim = maxDim || 2000;
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   let w = img.naturalWidth;
@@ -1571,14 +1571,13 @@ function resizeImageForOCR(img, maxDim) {
   canvas.height = h;
   ctx.drawImage(img, 0, 0, w, h);
 
-  // グレースケール + コントラスト強調
+  // グレースケール + 適度なコントラスト強調（二値化はしない）
   const imageData = ctx.getImageData(0, 0, w, h);
   const d = imageData.data;
   for (let i = 0; i < d.length; i += 4) {
     let gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
-    gray = Math.min(255, Math.max(0, (gray - 128) * 1.5 + 128));
-    // 二値化（しきい値150）で数字を際立たせる
-    gray = gray > 150 ? 255 : 0;
+    // 穏やかなコントラスト強調
+    gray = Math.min(255, Math.max(0, (gray - 128) * 1.4 + 128));
     d[i] = d[i+1] = d[i+2] = gray;
   }
   ctx.putImageData(imageData, 0, 0);
@@ -1603,28 +1602,24 @@ async function analyzeScorecard() {
   if (progressBar) progressBar.style.width = '5%';
 
   try {
-    // Tesseract.jsが読み込まれているか確認
     if (typeof Tesseract === 'undefined') {
       throw new Error('OCRエンジンが読み込めません。インターネット接続を確認してください。');
     }
 
-    // --- 画像前処理（リサイズ含む） ---
     loadingSubtext.textContent = '画像を処理中...';
     if (progressBar) progressBar.style.width = '10%';
 
-    const canvas = resizeImageForOCR(img, 1600);
-    console.log('OCR canvas size:', canvas.width, 'x', canvas.height);
+    const canvas = resizeImageForOCR(img, 2000);
 
     loadingText.textContent = 'スコアを読み取り中...';
     loadingSubtext.textContent = 'OCRエンジンを起動中...';
     if (progressBar) progressBar.style.width = '15%';
 
-    // --- Tesseract OCR 実行 ---
+    // --- Tesseract OCR 実行（PSM 11: Sparse text） ---
     let worker;
     try {
       worker = await Tesseract.createWorker('eng', 1, {
         logger: m => {
-          console.log('Tesseract:', m.status, m.progress);
           if (m.status === 'recognizing text') {
             const pct = Math.round(20 + m.progress * 70);
             if (progressBar) progressBar.style.width = pct + '%';
@@ -1642,17 +1637,14 @@ async function analyzeScorecard() {
       throw new Error('OCRエンジンの起動に失敗: ' + workerErr.message);
     }
 
+    // PSM 11 = Sparse text. テーブル内のバラバラな数字に最適
     await worker.setParameters({
-      tessedit_char_whitelist: '0123456789',
-      tessedit_pageseg_mode: '6',
+      tessedit_pageseg_mode: '11',
     });
 
     loadingSubtext.textContent = 'スコアカードを認識中...';
     const result = await worker.recognize(canvas);
     await worker.terminate();
-
-    console.log('OCR raw text:', result.data.text);
-    console.log('OCR words count:', result.data.words ? result.data.words.length : 0);
 
     if (progressBar) progressBar.style.width = '95%';
     loadingText.textContent = 'スコアを解析中...';
@@ -1664,12 +1656,10 @@ async function analyzeScorecard() {
     // --- 手入力画面に遷移してスコアを埋める ---
     navigateTo('page-manual');
 
-    // プレーヤー入力・テーブルが存在することを確認
     renderPlayerInputs();
     renderScoreTable('score-table-out', PAR_OUT, 1);
     renderScoreTable('score-table-in', PAR_IN, 10);
 
-    // スコアを埋める
     if (ocrScores) {
       fillOcrScores('score-table-out', ocrScores.out);
       fillOcrScores('score-table-in', ocrScores.in);
@@ -1681,19 +1671,21 @@ async function analyzeScorecard() {
 
     const filledCount = ocrScores ? ocrScores.filledCount : 0;
     const totalCells = playerCount * 18;
+    const ocrText = result.data.text || '';
     if (filledCount === 0) {
-      showToast('スコアを読み取れませんでした。手入力で修正してください。');
+      // デバッグ情報をトーストで表示
+      const wordCount = result.data.words ? result.data.words.length : 0;
+      const textPreview = ocrText.substring(0, 60).replace(/\n/g, ' ');
+      showToast('読取0件。OCR検出=' + wordCount + '語。テキスト: ' + textPreview + '... 手入力で修正してください。', 8000);
     } else {
       showToast(filledCount + '/' + totalCells + ' セルを読み取りました。間違いを修正してください');
     }
 
   } catch (e) {
     console.error('OCR Error:', e);
-    // ユーザーに詳しいエラーを表示
     const errMsg = e.message || '不明なエラー';
-    showToast('読み取り失敗: ' + errMsg);
+    showToast('読み取り失敗: ' + errMsg, 6000);
 
-    // エラーでも手入力画面に遷移して手入力可能にする
     navigateTo('page-manual');
     renderPlayerInputs();
     renderScoreTable('score-table-out', PAR_OUT, 1);
@@ -1707,109 +1699,150 @@ async function analyzeScorecard() {
   }
 }
 
-// --- OCR結果パーサー: words の位置情報からスコア行を抽出 ---
+// --- OCR結果パーサー ---
 function parseOcrToScores(data) {
-  if (!data || !data.words || data.words.length === 0) return null;
+  if (!data) return null;
 
-  // 全数字ワードを取得（位置付き）
-  const nums = data.words
-    .filter(w => /^\d{1,2}$/.test(w.text.trim()))
-    .map(w => ({
-      val: parseInt(w.text.trim()),
-      x: (w.bbox.x0 + w.bbox.x1) / 2,
-      y: (w.bbox.y0 + w.bbox.y1) / 2,
-      w: w.bbox.x1 - w.bbox.x0,
-      h: w.bbox.y1 - w.bbox.y0,
-    }));
+  // 方法1: words（位置情報付き）でパース
+  let result = parseByWords(data);
+  if (result && result.filledCount > 0) return result;
 
-  if (nums.length < 10) return null;
+  // 方法2: テキスト行ベースでパース（フォールバック）
+  result = parseByText(data.text);
+  if (result && result.filledCount > 0) return result;
 
-  // 画像全体のサイズ推定
-  const maxX = Math.max(...nums.map(n => n.x));
+  return null;
+}
+
+// --- 方法1: words の位置情報からスコア行を抽出 ---
+function parseByWords(data) {
+  if (!data.words || data.words.length === 0) return null;
+
+  // 全ワードから数字を抽出（1-3桁）
+  const nums = [];
+  for (let i = 0; i < data.words.length; i++) {
+    const w = data.words[i];
+    const text = w.text.replace(/[^0-9]/g, '');
+    if (!text) continue;
+    // 複数桁がくっついている場合も個別に分解を試みる
+    if (text.length <= 2) {
+      const val = parseInt(text);
+      if (val >= 1 && val <= 99) {
+        nums.push({
+          val: val,
+          x: (w.bbox.x0 + w.bbox.x1) / 2,
+          y: (w.bbox.y0 + w.bbox.y1) / 2,
+        });
+      }
+    } else {
+      // 3桁以上: 1桁ずつ分解（セルが結合認識された場合）
+      const charWidth = (w.bbox.x1 - w.bbox.x0) / text.length;
+      for (let c = 0; c < text.length; c++) {
+        const val = parseInt(text[c]);
+        if (val >= 1 && val <= 9) {
+          nums.push({
+            val: val,
+            x: w.bbox.x0 + charWidth * (c + 0.5),
+            y: (w.bbox.y0 + w.bbox.y1) / 2,
+          });
+        }
+      }
+    }
+  }
+
+  if (nums.length < 8) return null;
+
   const maxY = Math.max(...nums.map(n => n.y));
 
   // Y座標でクラスタリング（行検出）
-  const rows = clusterByY(nums, maxY * 0.025);
+  const rows = clusterByY(nums, maxY * 0.03);
 
-  // 各行をX座標でソート
   rows.forEach(row => row.sort((a, b) => a.x - b.x));
-
-  // 行をY座標でソート
   rows.sort((a, b) => {
     const ay = a.reduce((s, n) => s + n.y, 0) / a.length;
     const by = b.reduce((s, n) => s + n.y, 0) / b.length;
     return ay - by;
   });
 
-  // スコアカードの構造: 
-  // 各ホール行は [ホール番号, (距離x4), PAR, スコアx4, HDCP] のような構成
-  // スコア値は 1-15 の範囲、距離は 100-600 の範囲、ホール番号は 1-18
-  // HDCP は 1-18
-  
-  // ホール行を特定する:
-  // - 行の最初の数字がホール番号(1-18)のいずれか
-  // - 行にスコア範囲(2-12)の数字が4つ以上ある
   const knownPars = {
     1:4, 2:5, 3:3, 4:4, 5:4, 6:5, 7:4, 8:3, 9:4,
     10:4, 11:4, 12:3, 13:5, 14:4, 15:4, 16:4, 17:3, 18:5
   };
-  const knownHdcp = {
-    1:5, 2:7, 3:17, 4:11, 5:13, 6:1, 7:15, 8:9, 9:3,
-    10:8, 11:4, 12:18, 13:16, 14:2, 15:12, 16:6, 17:14, 18:10
-  };
 
-  const holeScores = {}; // { holeNumber: [score1, score2, score3, score4] }
+  const holeScores = {};
 
   for (const row of rows) {
-    if (row.length < 3) continue;
+    if (row.length < 2) continue;
 
-    // この行のスコア候補（2〜15の数字）を末尾側から取得
-    const scoreCandidates = row.filter(n => n.val >= 2 && n.val <= 15);
+    // スコア候補（2〜15の数字）
+    const scoreCandidates = row.filter(n => n.val >= 2 && n.val <= 12);
     if (scoreCandidates.length < 2) continue;
 
-    // ホール番号候補: 行の中で1-18のいずれか、かつX座標が最も左
+    // ホール番号を推定: 行の左端の値が1-18
     const firstNum = row[0];
     const holeNum = firstNum.val;
     if (holeNum < 1 || holeNum > 18) continue;
 
-    // この行の右側にあるスコア候補を取得
-    // PAR値とHDCP値を除外するため、既知の値を使う
-    const par = knownPars[holeNum];
-    const hdcp = knownHdcp[holeNum];
+    // ホール番号より右のスコア候補
+    let candidates = scoreCandidates.filter(n => n.x > firstNum.x + 5);
 
-    // スコア候補: ホール番号より右にある2-15の数字
-    // 距離値(3桁)は既にフィルタ済み(1-2桁のみ)
-    let candidates = row.filter(n => n.x > firstNum.x && n.val >= 2 && n.val <= 15);
-
-    // PAR値とHDCP値に近い値を除外する試み
-    // 右端の数字がHDCPの可能性が高い
-    if (candidates.length > playerCount) {
-      // HDCPと一致する末尾の数字を除外
-      const last = candidates[candidates.length - 1];
-      if (last.val === hdcp) {
-        candidates = candidates.slice(0, -1);
-      }
-    }
-    if (candidates.length > playerCount) {
-      // PAR値と一致する先頭の数字を除外
-      const first = candidates[0];
-      if (first.val === par) {
-        candidates = candidates.slice(1);
-      }
-    }
-
-    // まだ多い場合は右からplayerCount個取る（スコア列は右寄り）
+    // 末尾playerCount個を取得（右側にスコアがある前提）
     if (candidates.length > playerCount) {
       candidates = candidates.slice(candidates.length - playerCount);
     }
 
-    if (candidates.length >= 2) {
+    if (candidates.length >= 1) {
       holeScores[holeNum] = candidates.map(c => c.val);
     }
   }
 
-  // OUT / IN に分配
-  const outScores = []; // [player][hole]
+  return buildScoreResult(holeScores);
+}
+
+// --- 方法2: テキスト行ベースでパース ---
+function parseByText(text) {
+  if (!text || text.trim().length === 0) return null;
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const holeScores = {};
+
+  for (const line of lines) {
+    // 行から数字を全て抽出
+    const numbers = [];
+    const matches = line.matchAll(/\d+/g);
+    for (const m of matches) {
+      const val = parseInt(m[0]);
+      // 1-2桁の数字のみ（距離やその他の大きな数字を除外）
+      if (val >= 1 && val <= 99 && m[0].length <= 2) {
+        numbers.push(val);
+      }
+    }
+
+    if (numbers.length < 3) continue;
+
+    // 先頭がホール番号(1-18)か?
+    const holeNum = numbers[0];
+    if (holeNum < 1 || holeNum > 18) continue;
+
+    // 残りからスコア候補(2-12)を抽出
+    const rest = numbers.slice(1);
+    const scoreCandidates = rest.filter(n => n >= 2 && n <= 12);
+
+    if (scoreCandidates.length >= 1) {
+      // 最後のplayerCount個をスコアとして取得
+      const scores = scoreCandidates.length > playerCount
+        ? scoreCandidates.slice(scoreCandidates.length - playerCount)
+        : scoreCandidates;
+      holeScores[holeNum] = scores;
+    }
+  }
+
+  return buildScoreResult(holeScores);
+}
+
+// --- スコア結果を構築 ---
+function buildScoreResult(holeScores) {
+  const outScores = [];
   const inScores = [];
   for (let p = 0; p < playerCount; p++) {
     outScores.push([]);
@@ -2011,7 +2044,8 @@ function saveResult() {
 }
 
 // =================== トースト通知 ===================
-function showToast(message) {
+function showToast(message, duration) {
+  duration = duration || 3000;
   // 既存のトーストがあれば削除
   const existing = document.querySelector('.toast');
   if (existing) existing.remove();
@@ -2033,6 +2067,8 @@ function showToast(message) {
     z-index: 10000;
     animation: toastIn 0.3s ease;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    max-width: 90vw;
+    text-align: center;
   `;
   document.body.appendChild(toast);
   
@@ -2040,7 +2076,7 @@ function showToast(message) {
     toast.style.opacity = '0';
     toast.style.transition = 'opacity 0.3s';
     setTimeout(() => toast.remove(), 300);
-  }, 2000);
+  }, duration);
 }
 
 // トーストアニメーションを動的に追加
