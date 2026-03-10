@@ -2324,13 +2324,17 @@ function openNumpad(input) {
   // 表示
   document.getElementById('score-numpad').style.display = 'block';
 
-  // 選択中セルがナンバーパッドに隠れないようスクロール
+  // ナンバーパッドの高さ分、ページ下部にパディングを追加してINコースが隠れないようにする
   requestAnimationFrame(() => {
     const numpadSheet = document.querySelector('.numpad-sheet');
     const numpadHeight = numpadSheet ? numpadSheet.offsetHeight : 200;
+    const manualContainer = document.querySelector('.manual-container');
+    if (manualContainer) {
+      manualContainer.style.paddingBottom = numpadHeight + 'px';
+    }
+    // 選択中セルがナンバーパッドに隠れないようスクロール
     const rect = input.getBoundingClientRect();
     const visibleBottom = window.innerHeight - numpadHeight;
-    // セルがナンバーパッドの後ろに隠れている、または画面上部より上の場合スクロール
     if (rect.bottom > visibleBottom || rect.top < 0) {
       const targetY = window.scrollY + rect.top - (visibleBottom / 2);
       window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
@@ -2344,6 +2348,11 @@ function closeNumpad() {
     numpadTarget.classList.remove('numpad-active');
   }
   numpadTarget = null;
+  // ナンバーパッドを閉じたらパディングを元に戻す
+  const manualContainer = document.querySelector('.manual-container');
+  if (manualContainer) {
+    manualContainer.style.paddingBottom = '';
+  }
 }
 
 function startScoreEntry() {
