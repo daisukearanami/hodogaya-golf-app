@@ -262,13 +262,15 @@ function collectPlayerData() {
 const ALL_HDCP = [...HDCP_OUT, ...HDCP_IN];
 const ALL_PAR  = [...PAR_OUT, ...PAR_IN];
 
-// チーム分け: ベスト+ワースト vs 2番手+3番手
+// チーム分け: プレーヤー1&2 = L組、プレーヤー3&4 = R組（入力順で決定）
 function determineTeams(players) {
   if (players.length !== 4) return null;
-  const sorted = [...players].sort((a, b) => a.hdcp - b.hdcp);
 
-  const teamL = [sorted[0], sorted[3]];
-  const teamR = [sorted[1], sorted[2]];
+  const teamL = [players[0], players[1]];
+  const teamR = [players[2], players[3]];
+
+  // 同ハンデでじゃんけんが必要だったか判定（情報表示用）
+  const sorted = [...players].sort((a, b) => a.hdcp - b.hdcp);
   const needsJanken = (sorted[0].hdcp === sorted[1].hdcp) || (sorted[2].hdcp === sorted[3].hdcp);
 
   return {
@@ -1517,9 +1519,11 @@ function renderHomePlayerInputs() {
     const existingHdcp = container.querySelector('[data-home-hdcp="' + i + '"]');
     const nameVal = existing ? existing.value : (savedPlayers && savedPlayers[i] ? savedPlayers[i].name : p.name);
     const hdcpVal = existingHdcp ? existingHdcp.value : (savedPlayers && savedPlayers[i] ? savedPlayers[i].hdcp : p.hdcp);
+    const teamLabel = playerCount === 4 ? (i < 2 ? 'L組' : 'R組') : '';
     html += `
       <div class="home-player-row">
         <span class="home-player-number">${i + 1}</span>
+        ${playerCount === 4 ? `<span class="home-team-label ${i < 2 ? 'team-label-l' : 'team-label-r'}">${teamLabel}</span>` : ''}
         <input type="text" class="input-field home-player-name" placeholder="プレーヤー${i+1}の名前" value="${nameVal}" data-home-player="${i}">
         <input type="number" class="input-field home-player-hdcp" placeholder="HD" value="${hdcpVal}" data-home-hdcp="${i}">
       </div>`;
@@ -1553,9 +1557,11 @@ function renderPlayerInputs() {
   const info = getHomePlayerInfo();
   let html = '';
   for (let i = 0; i < playerCount; i++) {
+    const teamLabel = playerCount === 4 ? (i < 2 ? 'L組' : 'R組') : '';
     html += `
       <div class="player-input-row">
         <span class="player-number">${i + 1}</span>
+        ${playerCount === 4 ? `<span class="input-team-label ${i < 2 ? 'team-label-l' : 'team-label-r'}">${teamLabel}</span>` : ''}
         <input type="text" class="input-field player-name-input" placeholder="名前" value="${info.names[i]}" data-player="${i}">
         <input type="number" class="input-field input-hdcp" placeholder="HDCP" value="${info.hdcps[i]}" data-player="${i}">
       </div>`;
