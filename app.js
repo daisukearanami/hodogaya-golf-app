@@ -478,6 +478,9 @@ function calculateBestGame(players) {
   const playerPoints = {};
   players.forEach(p => { playerPoints[p.index] = 0; });
 
+  // 最小ハンデ（ベストプレーヤー）を基準にハンデ差で計算
+  const minHdcp = Math.min(...players.map(p => p.hdcp));
+
   for (let h = 0; h < 18; h++) {
     const isOut = h < 9;
     const idx = isOut ? h : h - 9;
@@ -486,10 +489,11 @@ function calculateBestGame(players) {
     const isCarryOver = nextCarryOver;
     nextCarryOver = false;
 
-    // 各プレーヤーのグロス・ネット・バーディ判定
+    // 各プレーヤーのグロス・ネット（ハンデ差ベース）・バーディ判定
     const scores = players.map(p => {
       const gross = isOut ? p.scoresOut[idx] : p.scoresIn[idx];
-      const strokes = getHoleStrokes(p.hdcp, si);
+      const hdcpDiff = p.hdcp - minHdcp;
+      const strokes = getHoleStrokes(hdcpDiff, si);
       const net = gross - strokes;
       const vsPar = gross - par;
       return { player: p, gross, net, strokes, vsPar };
@@ -2340,9 +2344,13 @@ function openNumpad(input) {
     }
     // 選択中セルがナンバーパッドに隠れないようスクロール
     const rect = input.getBoundingClientRect();
+    const headerHeight = 60; // ヘッダー分のオフセット
+    const visibleTop = headerHeight;
     const visibleBottom = window.innerHeight - numpadHeight;
-    if (rect.bottom > visibleBottom || rect.top < 0) {
-      const targetY = window.scrollY + rect.top - (visibleBottom / 2);
+    const visibleArea = visibleBottom - visibleTop;
+    if (rect.bottom > visibleBottom || rect.top < visibleTop) {
+      // セルを可視領域の上部1/3あたりに配置
+      const targetY = window.scrollY + rect.top - visibleTop - (visibleArea * 0.3);
       window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
     }
   });
