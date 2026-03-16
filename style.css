@@ -1342,6 +1342,12 @@ input, select, button, textarea {
   font-weight: 700;
 }
 
+.stroke-mark {
+  color: var(--green);
+  font-size: 8px;
+  font-weight: 700;
+}
+
 .cell-best {
   background: rgba(193, 164, 88, 0.2) !important;
   font-weight: 700;

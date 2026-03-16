@@ -104,6 +104,7 @@ function setPlayerCount(count) {
 // =================== スタートコース設定 ===================
 function setStartCourse(course) {
   startCourse = course;
+  localStorage.setItem('hodogaya_start_course', course);
   document.querySelectorAll('.start-course-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.course === course);
   });
@@ -1455,10 +1456,15 @@ function buildBestTable(label, holes, startHole, players) {
   for (let i = 0; i < 9; i++) html += `<td>${holes[i].par}</td>`;
   html += `<td></td></tr>`;
 
-  // 各プレーヤーのネットスコア行
+  // HD行（各ホールのストロークインデックス）
+  html += `<tr class="hdcp-stroke-row"><td class="td-label">HD</td>`;
+  for (let i = 0; i < 9; i++) html += `<td>${holes[i].si}</td>`;
+  html += `<td></td></tr>`;
+
+  // 各プレーヤー行：グロス表示、ハンデありの場合はマーク付き、ベスト判定は相対ネット
   players.forEach(p => {
     html += `<tr><td class="td-label">${p.name}</td>`;
-    let total = 0;
+    let grossTotal = 0;
     for (let i = 0; i < 9; i++) {
       const hr = holes[i];
       const sc = hr.scores.find(s => s.player.index === p.index);
@@ -1469,11 +1475,12 @@ function buildBestTable(label, holes, startHole, players) {
       if (isBest) cls = 'cell-best';
       if (isBirdie) cls += ' cell-birdie';
       if (isEagle) cls += ' cell-eagle';
-      const strokeMark = sc.strokes > 0 ? `<sup>${sc.strokes}</sup>` : '';
-      html += `<td class="${cls.trim()}">${sc.net}${strokeMark}</td>`;
-      total += sc.net;
+      // グロス表示、ストローク数を上付きで表示
+      const strokeMark = sc.strokes > 0 ? `<sup class="stroke-mark">*${sc.strokes}</sup>` : '';
+      html += `<td class="${cls.trim()}">${sc.gross}${strokeMark}</td>`;
+      grossTotal += sc.gross;
     }
-    html += `<td class="td-total">${total}</td></tr>`;
+    html += `<td class="td-total">${grossTotal}</td></tr>`;
   });
 
   // ポイント行
@@ -2340,18 +2347,31 @@ function openNumpad(input) {
     const numpadHeight = numpadSheet ? numpadSheet.offsetHeight : 200;
     const manualContainer = document.querySelector('.manual-container');
     if (manualContainer) {
-      manualContainer.style.paddingBottom = numpadHeight + 'px';
+      manualContainer.style.paddingBottom = (numpadHeight + 40) + 'px';
     }
-    // 選択中セルがナンバーパッドに隠れないようスクロール
+
+    // 横スクロール：後半ホール（OUT H7以降、IN H16以降）ではテーブルを横にスクロールして対象ホールを表示
+    const wrapper = input.closest('.score-table-wrapper');
+    if (wrapper) {
+      const cell = input.closest('td');
+      if (cell) {
+        const cellLeft = cell.offsetLeft;
+        const cellWidth = cell.offsetWidth;
+        const wrapperWidth = wrapper.clientWidth;
+        // セルが見えない位置にある場合、セルが中央付近に来るようスクロール
+        const targetScrollLeft = cellLeft - (wrapperWidth / 3);
+        wrapper.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: 'smooth' });
+      }
+    }
+
+    // 縦スクロール：常にアクティブセルを可視領域の適切な位置に配置
     const rect = input.getBoundingClientRect();
-    const headerHeight = 60; // ヘッダー分のオフセット
-    const visibleTop = headerHeight;
     const visibleBottom = window.innerHeight - numpadHeight;
-    const visibleArea = visibleBottom - visibleTop;
-    if (rect.bottom > visibleBottom || rect.top < visibleTop) {
-      // セルを可視領域の上部1/3あたりに配置
-      const targetY = window.scrollY + rect.top - visibleTop - (visibleArea * 0.3);
-      window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+    const visibleTop = 50; // ヘッダー高さ
+    const targetPosition = visibleTop + (visibleBottom - visibleTop) * 0.25; // 可視領域の上から25%
+    const scrollOffset = rect.top - targetPosition;
+    if (Math.abs(scrollOffset) > 10) {
+      window.scrollTo({ top: Math.max(0, window.scrollY + scrollOffset), behavior: 'smooth' });
     }
   });
 }
@@ -3280,10 +3300,11 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('[INIT] game-type-options element:', gtContainer);
     console.log('[INIT] game-type-options innerHTML length:', gtContainer ? gtContainer.innerHTML.length : 'N/A');
     
-    // スタートコースをINに設定
-    setStartCourse('IN');
+    // スタートコースを復元（保存済みがあればそれを使う）
+    const savedStartCourse = localStorage.getItem('hodogaya_start_course') || 'IN';
+    setStartCourse(savedStartCourse);
     document.querySelectorAll('.start-course-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.course === 'IN');
+      btn.classList.toggle('active', btn.dataset.course === savedStartCourse);
     });
 
     // グリーン/ティー初期表示更新
