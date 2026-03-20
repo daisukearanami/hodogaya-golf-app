@@ -479,9 +479,6 @@ function calculateBestGame(players) {
   const playerPoints = {};
   players.forEach(p => { playerPoints[p.index] = 0; });
 
-  // 最小ハンデ（ベストプレーヤー）を基準にハンデ差で計算
-  const minHdcp = Math.min(...players.map(p => p.hdcp));
-
   for (let h = 0; h < 18; h++) {
     const isOut = h < 9;
     const idx = isOut ? h : h - 9;
@@ -490,39 +487,58 @@ function calculateBestGame(players) {
     const isCarryOver = nextCarryOver;
     nextCarryOver = false;
 
-    // 各プレーヤーのグロス・ネット（ハンデ差ベース）・バーディ判定
+    // 各プレーヤーのグロス・バーディ判定
     const scores = players.map(p => {
       const gross = isOut ? p.scoresOut[idx] : p.scoresIn[idx];
-      const hdcpDiff = p.hdcp - minHdcp;
-      const strokes = getHoleStrokes(hdcpDiff, si);
-      const net = gross - strokes;
       const vsPar = gross - par;
-      return { player: p, gross, net, strokes, vsPar };
+      return { player: p, gross, vsPar, strokes: 0 };
     });
 
-    // --- ベスト判定 ---
-    const bestNet = Math.min(...scores.map(s => s.net));
-    const bestPlayers = scores.filter(s => s.net === bestNet);
-    const hasSoleBest = bestPlayers.length === 1;
+    // --- ベスト判定（ペアワイズ比較） ---
+    // 各プレーヤーが他の全プレーヤーにペアワイズで厳密に勝てるか判定
+    let soleBestIdx = -1;
+    for (let i = 0; i < players.length; i++) {
+      let beatsAll = true;
+      for (let j = 0; j < players.length; j++) {
+        if (i === j) continue;
+        const hdcpDiff = Math.abs(players[i].hdcp - players[j].hdcp);
+        const pairStrokes = getHoleStrokes(hdcpDiff, si);
+        let netI = scores[i].gross;
+        let netJ = scores[j].gross;
+        if (players[i].hdcp > players[j].hdcp) {
+          netI -= pairStrokes; // iがハンデをもらう
+        } else if (players[j].hdcp > players[i].hdcp) {
+          netJ -= pairStrokes; // jがハンデをもらう
+        }
+        if (netI >= netJ) {
+          beatsAll = false;
+          break;
+        }
+      }
+      if (beatsAll) {
+        soleBestIdx = i;
+        break;
+      }
+    }
 
-    // --- キャリーオーバー判定 ---
-    const allSameGross = scores.every(s => s.gross === scores[0].gross);
-    const allSameNet = scores.every(s => s.net === scores[0].net);
-    const triggerCarryOver = allSameGross && allSameNet;
+    const hasSoleBest = soleBestIdx >= 0;
+    const soleBestPlayer = hasSoleBest ? players[soleBestIdx] : null;
+
+    // --- キャリーオーバー判定（ベストなしの場合） ---
+    const triggerCarryOver = !hasSoleBest;
 
     // --- ポイント設定（各プレーヤーから○ポイント × (n-1)人分） ---
     const n = players.length;
-    const others = n - 1; // 他プレーヤーの人数
+    const others = n - 1;
 
     // --- ベストポイント ---
     const multiplier = isCarryOver ? 2 : 1;
     const bestPts = {};
     players.forEach(p => { bestPts[p.index] = 0; });
     if (hasSoleBest) {
-      // ベスト獲得者: 各プレーヤーから1pt(CO時2pt)ずつ
-      bestPts[bestPlayers[0].player.index] = others * 1 * multiplier;
+      bestPts[soleBestPlayer.index] = others * 1 * multiplier;
       scores.forEach(s => {
-        if (s.player.index !== bestPlayers[0].player.index) {
+        if (s.player.index !== soleBestPlayer.index) {
           bestPts[s.player.index] = -1 * multiplier;
         }
       });
@@ -534,13 +550,10 @@ function calculateBestGame(players) {
     scores.forEach(s => {
       let ptPerPlayer = 0;
       if (s.vsPar <= -3) {
-        // アルバトロス以上: 各プレーヤーから3pt
         ptPerPlayer = 3;
       } else if (s.vsPar === -2) {
-        // イーグル: 各プレーヤーから2pt
         ptPerPlayer = 2;
       } else if (s.vsPar === -1) {
-        // バーディ: 各プレーヤーから1pt
         ptPerPlayer = 1;
       }
       if (ptPerPlayer > 0) {
@@ -562,8 +575,8 @@ function calculateBestGame(players) {
 
     holeResults.push({
       holeIdx: h, holeNum: h + 1, par, si,
-      scores, bestNet, hasSoleBest,
-      soleBestPlayer: hasSoleBest ? bestPlayers[0].player : null,
+      scores, bestNet: null, hasSoleBest,
+      soleBestPlayer,
       isCarryOver, triggerCarryOver,
       bestPts, birdiePts, holePts,
     });
