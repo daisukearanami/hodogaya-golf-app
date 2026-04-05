@@ -524,9 +524,23 @@ function calculateBestGame(players) {
     const hasSoleBest = soleBestIdx >= 0;
     const soleBestPlayer = hasSoleBest ? players[soleBestIdx] : null;
 
-    // --- キャリーオーバー判定（全プレーヤーが同グロス かつ ネットでも全員引き分けのときのみ） ---
+    // --- キャリーオーバー判定（全プレーヤーが同グロス かつ 全ペアのネットも引き分けのときのみ） ---
     const allSameGross = scores.every(s => s.gross === scores[0].gross);
-    const triggerCarryOver = allSameGross && !hasSoleBest;
+    let allPairsTied = true;
+    if (allSameGross) {
+      for (let i = 0; i < players.length && allPairsTied; i++) {
+        for (let j = i + 1; j < players.length && allPairsTied; j++) {
+          const hdcpDiff = Math.abs(players[i].hdcp - players[j].hdcp);
+          const pairStrokes = getHoleStrokes(hdcpDiff, si);
+          if (pairStrokes > 0) {
+            allPairsTied = false;
+          }
+        }
+      }
+    } else {
+      allPairsTied = false;
+    }
+    const triggerCarryOver = allSameGross && allPairsTied;
 
     // --- ポイント設定（各プレーヤーから○ポイント × (n-1)人分） ---
     const n = players.length;
