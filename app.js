@@ -524,9 +524,9 @@ function calculateBestGame(players) {
     const hasSoleBest = soleBestIdx >= 0;
     const soleBestPlayer = hasSoleBest ? players[soleBestIdx] : null;
 
-    // --- キャリーオーバー判定（全プレーヤーが同グロスのときのみ） ---
+    // --- キャリーオーバー判定（全プレーヤーが同グロス かつ ネットでも全員引き分けのときのみ） ---
     const allSameGross = scores.every(s => s.gross === scores[0].gross);
-    const triggerCarryOver = allSameGross;
+    const triggerCarryOver = allSameGross && !hasSoleBest;
 
     // --- ポイント設定（各プレーヤーから○ポイント × (n-1)人分） ---
     const n = players.length;

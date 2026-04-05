@@ -1,5 +1,5 @@
 // Service Worker for 程ヶ谷CC Game Tsuru Han
-const CACHE_NAME = 'hodogaya-v17';
+const CACHE_NAME = 'hodogaya-v18';
 const ASSETS = [
   './',
   './index.html',
