@@ -2262,6 +2262,7 @@ document.addEventListener('input', function(e) {
       calculateTableTotals(table.id);
     }
     colorizeScoreInput(e.target);
+    saveScores();
   }
 });
 
@@ -2645,39 +2646,56 @@ document.head.appendChild(scoreStyle);
 
 // =================== 初期化 ===================
 // =================== スコア自動入力 ===================
+// =================== スコアの永続化 ===================
+function saveScores() {
+  const data = { out: [], in: [] };
+  ['score-table-out', 'score-table-in'].forEach(tableId => {
+    const key = tableId === 'score-table-out' ? 'out' : 'in';
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach((row, pIdx) => {
+      const scores = [];
+      row.querySelectorAll('.score-input').forEach(inp => {
+        scores.push(inp.value || '');
+      });
+      data[key][pIdx] = scores;
+    });
+  });
+  try {
+    localStorage.setItem('hodogaya_scores', JSON.stringify(data));
+  } catch(e) { console.warn('Score save failed', e); }
+}
+
+function loadScores() {
+  try {
+    const saved = localStorage.getItem('hodogaya_scores');
+    if (saved) return JSON.parse(saved);
+  } catch(e) { console.warn('Score load failed', e); }
+  return null;
+}
+
 function prefillScores() {
-  // OUT (Hole 1-9) 各プレーヤーのスコア
-  const scoresOut = [
-    [5, 6, 4, 5, 5, 7, 5, 4, 5],  // 荒濤  = 46
-    [5, 6, 5, 5, 6, 7, 5, 4, 5],  // 佐久間 = 48
-    [6, 6, 5, 5, 5, 7, 5, 4, 5],  // 上野  = 48
-    [5, 6, 3, 5, 5, 6, 5, 3, 6],  // 佐藤  = 44
-  ];
-  // IN (Hole 10-18) 各プレーヤーのスコア
-  const scoresIn = [
-    [6, 7, 4, 6, 6, 5, 5, 4, 7],  // 荒濤  = 50
-    [6, 5, 4, 5, 4, 5, 5, 4, 6],  // 佐久間 = 44
-    [7, 6, 5, 5, 5, 5, 6, 4, 7],  // 上野  = 50
-    [5, 6, 4, 6, 5, 5, 5, 4, 7],  // 佐藤  = 47
-  ];
+  const saved = loadScores();
+  if (!saved) return;
 
   function fillTable(tableId, scores) {
     const table = document.getElementById(tableId);
-    if (!table) return;
+    if (!table || !scores) return;
     const rows = table.querySelectorAll('tbody tr');
     rows.forEach((row, pIdx) => {
       if (pIdx >= scores.length) return;
       const inputs = row.querySelectorAll('.score-input');
       inputs.forEach((inp, hIdx) => {
-        if (hIdx < scores[pIdx].length) {
+        if (hIdx < scores[pIdx].length && scores[pIdx][hIdx] !== '') {
           inp.value = scores[pIdx][hIdx];
         }
       });
     });
   }
 
-  fillTable('score-table-out', scoresOut);
-  fillTable('score-table-in', scoresIn);
+  fillTable('score-table-out', saved.out);
+  fillTable('score-table-in', saved.in);
 
   // 合計を計算
   calculateTableTotals('score-table-out');
