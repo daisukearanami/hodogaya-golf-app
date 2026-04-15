@@ -2394,14 +2394,37 @@ function openNumpad(input) {
       }
     }
 
-    // 縦スクロール：常にアクティブセルを可視領域の適切な位置に配置
-    const rect = input.getBoundingClientRect();
-    const visibleBottom = window.innerHeight - numpadHeight;
-    const visibleTop = 50; // ヘッダー高さ
-    const targetPosition = visibleTop + (visibleBottom - visibleTop) * 0.25; // 可視領域の上から25%
-    const scrollOffset = rect.top - targetPosition;
-    if (Math.abs(scrollOffset) > 10) {
-      window.scrollTo({ top: Math.max(0, window.scrollY + scrollOffset), behavior: 'smooth' });
+    // 縦スクロール：テーブルの thead が見える位置にスクロール
+    // thead（ホール番号＋PAR行）が常に画面内に表示されるよう、
+    // テーブル上端を基準にスクロールする
+    const table = input.closest('table');
+    const thead = table ? table.querySelector('thead') : null;
+    if (thead) {
+      const theadRect = thead.getBoundingClientRect();
+      const visibleTop = 100; // app-header + page-header の高さ概算
+      const visibleBottom = window.innerHeight - numpadHeight;
+      const cellRect = input.getBoundingClientRect();
+
+      // thead が画面上部より上に隠れている場合、thead が見えるようにスクロール
+      if (theadRect.top < visibleTop) {
+        const scrollUp = visibleTop - theadRect.top;
+        window.scrollTo({ top: Math.max(0, window.scrollY - scrollUp), behavior: 'smooth' });
+      }
+      // セルがナンバーパッドの下に隠れている場合、テーブルごと上にスクロール
+      // ただし thead が隠れない範囲で
+      else if (cellRect.bottom > visibleBottom) {
+        // セルを表示するために必要なスクロール量
+        const scrollDown = cellRect.bottom - visibleBottom + 20;
+        // thead がまだ見えるか確認
+        const newTheadTop = theadRect.top - scrollDown;
+        if (newTheadTop >= visibleTop) {
+          window.scrollTo({ top: window.scrollY + scrollDown, behavior: 'smooth' });
+        } else {
+          // thead が隠れてしまう場合は、thead上端をvisibleTopに合わせる
+          const maxScroll = theadRect.top - visibleTop;
+          window.scrollTo({ top: window.scrollY + maxScroll, behavior: 'smooth' });
+        }
+      }
     }
   });
 }
@@ -3331,72 +3354,9 @@ function showShotStats() {
 
 // =================== スティッキーホールバー ===================
 function initStickyHoleBar() {
-  // thead 自体に transform: translateY() を適用してスティッキーにする
-  // クローンではなく実要素を動かすため、列幅のズレが原理的に起きない
-
-  function updateStickyTheads() {
-    var manualPage = document.getElementById('page-manual');
-    if (!manualPage || !manualPage.classList.contains('active')) {
-      resetTheads();
-      return;
-    }
-
-    // ページヘッダーの下端を取得
-    var pageHeader = manualPage.querySelector('.page-header');
-    var stickyTop = 56 + 45;
-    if (pageHeader) {
-      stickyTop = pageHeader.getBoundingClientRect().bottom;
-    }
-
-    var tables = [
-      document.getElementById('score-table-out'),
-      document.getElementById('score-table-in')
-    ];
-
-    for (var t = 0; t < tables.length; t++) {
-      var table = tables[t];
-      if (!table) continue;
-      var thead = table.querySelector('thead');
-      if (!thead) continue;
-
-      var wrapper = table.closest('.score-table-wrapper');
-      if (!wrapper) continue;
-      var wrapperRect = wrapper.getBoundingClientRect();
-
-      // テーブルが画面上部にかかっていて、theadが隠れている場合
-      var theadNaturalTop = wrapperRect.top; // theadはテーブルの先頭
-      var wrapperBottom = wrapperRect.bottom;
-      var theadHeight = thead.offsetHeight;
-
-      if (theadNaturalTop < stickyTop && wrapperBottom > stickyTop + theadHeight + 30) {
-        // thead を下にずらして画面内に固定
-        var offset = stickyTop - theadNaturalTop;
-        thead.style.transform = 'translateY(' + offset + 'px)';
-        thead.style.zIndex = '10';
-        thead.style.position = 'relative';
-        // 影をつけて浮いている感を出す
-        thead.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
-      } else {
-        // 通常位置に戻す
-        thead.style.transform = '';
-        thead.style.zIndex = '';
-        thead.style.position = '';
-        thead.style.boxShadow = '';
-      }
-    }
-  }
-
-  function resetTheads() {
-    var theads = document.querySelectorAll('.score-table thead');
-    for (var i = 0; i < theads.length; i++) {
-      theads[i].style.transform = '';
-      theads[i].style.zIndex = '';
-      theads[i].style.position = '';
-      theads[i].style.boxShadow = '';
-    }
-  }
-
-  window.addEventListener('scroll', updateStickyTheads, { passive: true });
+  // スティッキーヘッダーは overflow-x:auto の制約で不可能なため、
+  // 代わりに openNumpad のスクロール制御で thead を常に表示する方式を採用
+  // この関数は互換性のため空で残す
 }
 
 // =================== 音声入力 ===================
