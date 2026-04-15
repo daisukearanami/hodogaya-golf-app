@@ -2380,51 +2380,32 @@ function openNumpad(input) {
       manualContainer.style.paddingBottom = (numpadHeight + 40) + 'px';
     }
 
-    // 横スクロール：後半ホール（OUT H7以降、IN H16以降）ではテーブルを横にスクロールして対象ホールを表示
+    // 横スクロール：対象セルが見えるようにテーブルを横スクロール
     const wrapper = input.closest('.score-table-wrapper');
     if (wrapper) {
       const cell = input.closest('td');
       if (cell) {
         const cellLeft = cell.offsetLeft;
-        const cellWidth = cell.offsetWidth;
         const wrapperWidth = wrapper.clientWidth;
-        // セルが見えない位置にある場合、セルが中央付近に来るようスクロール
-        const targetScrollLeft = cellLeft - (wrapperWidth / 3);
-        wrapper.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: 'smooth' });
+        const wrapperScroll = wrapper.scrollLeft;
+        // セルが見えていなければスクロール
+        if (cellLeft < wrapperScroll || cellLeft + cell.offsetWidth > wrapperScroll + wrapperWidth) {
+          wrapper.scrollTo({ left: Math.max(0, cellLeft - wrapperWidth / 3), behavior: 'smooth' });
+        }
       }
     }
 
-    // 縦スクロール：アクティブセルとthead両方が可視領域に入るよう最小限スクロール
-    const table = input.closest('table');
-    const thead = table ? table.querySelector('thead') : null;
-    if (thead) {
-      const visibleTop = 100; // app-header + page-header の高さ概算
-      const visibleBottom = window.innerHeight - numpadHeight;
-      const cellRect = input.getBoundingClientRect();
-      const theadRect = thead.getBoundingClientRect();
+    // 縦スクロール：アクティブセルが可視領域に入る最小限のスクロールのみ行う
+    const visibleTop = 105; // app-header(56) + page-header(~49)
+    const visibleBottom = window.innerHeight - numpadHeight - 10;
+    const cellRect = input.getBoundingClientRect();
 
-      // セルがナンバーパッドの下に隠れている場合
-      if (cellRect.bottom > visibleBottom) {
-        // セルが見えるのに必要な最小スクロール量
-        const needed = cellRect.bottom - visibleBottom + 10;
-        // そのスクロールでtheadが隠れないか確認
-        if (theadRect.top - needed >= visibleTop) {
-          // theadも見える → そのままスクロール
-          window.scrollTo({ top: window.scrollY + needed, behavior: 'smooth' });
-        } else {
-          // theadが隠れてしまう → theadをギリギリ見せる位置までだけスクロール
-          const maxScroll = Math.max(0, theadRect.top - visibleTop);
-          if (maxScroll > 5) {
-            window.scrollTo({ top: window.scrollY + maxScroll, behavior: 'smooth' });
-          }
-          // セルがまだ隠れていても、theadを優先してこれ以上スクロールしない
-        }
-      }
-      // theadが画面上部より上に隠れている場合、theadが見えるように上にスクロール
-      else if (theadRect.top < visibleTop) {
-        const scrollUp = visibleTop - theadRect.top;
-        window.scrollTo({ top: Math.max(0, window.scrollY - scrollUp), behavior: 'smooth' });
-      }
+    if (cellRect.top < visibleTop) {
+      // セルが上に隠れている → 上にスクロール
+      window.scrollTo({ top: window.scrollY - (visibleTop - cellRect.top) - 10, behavior: 'smooth' });
+    } else if (cellRect.bottom > visibleBottom) {
+      // セルがナンバーパッドの下に隠れている → 下にスクロール（最小限）
+      window.scrollTo({ top: window.scrollY + (cellRect.bottom - visibleBottom) + 10, behavior: 'smooth' });
     }
   });
 }
