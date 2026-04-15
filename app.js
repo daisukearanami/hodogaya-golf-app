@@ -3331,100 +3331,72 @@ function showShotStats() {
 
 // =================== スティッキーホールバー ===================
 function initStickyHoleBar() {
-  var bar = document.getElementById('sticky-hole-bar');
-  if (!bar) return;
+  // thead 自体に transform: translateY() を適用してスティッキーにする
+  // クローンではなく実要素を動かすため、列幅のズレが原理的に起きない
 
-  var lastActiveTableId = null;
-
-  function updateStickyBar() {
+  function updateStickyTheads() {
     var manualPage = document.getElementById('page-manual');
     if (!manualPage || !manualPage.classList.contains('active')) {
-      bar.style.display = 'none';
-      lastActiveTableId = null;
+      resetTheads();
       return;
     }
 
     // ページヘッダーの下端を取得
     var pageHeader = manualPage.querySelector('.page-header');
-    var stickyTop = 56 + 45; // header + page-header の概算
+    var stickyTop = 56 + 45;
     if (pageHeader) {
-      var phRect = pageHeader.getBoundingClientRect();
-      stickyTop = phRect.bottom;
+      stickyTop = pageHeader.getBoundingClientRect().bottom;
     }
 
-    var activeWrapper = null;
-    var activeTable = null;
-
-    // OUT / IN どちらのテーブルが画面上部にかかっているか
-    var pairs = [
-      { wId: 'score-table-out-wrapper', tId: 'score-table-out' },
-      { wId: 'score-table-in-wrapper', tId: 'score-table-in' }
+    var tables = [
+      document.getElementById('score-table-out'),
+      document.getElementById('score-table-in')
     ];
-    for (var p = 0; p < pairs.length; p++) {
-      var w = document.getElementById(pairs[p].wId);
-      var t = document.getElementById(pairs[p].tId);
-      if (!w || !t) continue;
-      var wRect = w.getBoundingClientRect();
-      if (wRect.top < stickyTop && wRect.bottom > stickyTop + 30) {
-        activeWrapper = w;
-        activeTable = t;
+
+    for (var t = 0; t < tables.length; t++) {
+      var table = tables[t];
+      if (!table) continue;
+      var thead = table.querySelector('thead');
+      if (!thead) continue;
+
+      var wrapper = table.closest('.score-table-wrapper');
+      if (!wrapper) continue;
+      var wrapperRect = wrapper.getBoundingClientRect();
+
+      // テーブルが画面上部にかかっていて、theadが隠れている場合
+      var theadNaturalTop = wrapperRect.top; // theadはテーブルの先頭
+      var wrapperBottom = wrapperRect.bottom;
+      var theadHeight = thead.offsetHeight;
+
+      if (theadNaturalTop < stickyTop && wrapperBottom > stickyTop + theadHeight + 30) {
+        // thead を下にずらして画面内に固定
+        var offset = stickyTop - theadNaturalTop;
+        thead.style.transform = 'translateY(' + offset + 'px)';
+        thead.style.zIndex = '10';
+        thead.style.position = 'relative';
+        // 影をつけて浮いている感を出す
+        thead.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+      } else {
+        // 通常位置に戻す
+        thead.style.transform = '';
+        thead.style.zIndex = '';
+        thead.style.position = '';
+        thead.style.boxShadow = '';
       }
     }
-
-    if (!activeTable) {
-      bar.style.display = 'none';
-      lastActiveTableId = null;
-      return;
-    }
-
-    // thead が画面外に隠れている場合のみ表示
-    var thead = activeTable.querySelector('thead');
-    if (!thead) { bar.style.display = 'none'; return; }
-    var theadRect = thead.getBoundingClientRect();
-    if (theadRect.bottom > stickyTop) {
-      bar.style.display = 'none';
-      lastActiveTableId = null;
-      return;
-    }
-
-    // thead をクローンして固定表示
-    // テーブルIDが変わった場合 or 初回のみクローンを再作成
-    if (lastActiveTableId !== activeTable.id) {
-      bar.innerHTML = '';
-      var cloneTable = document.createElement('table');
-      cloneTable.className = activeTable.className + ' sticky-thead-clone';
-      cloneTable.style.cssText = 'width:' + activeTable.offsetWidth + 'px; table-layout:fixed;';
-      // colgroup をコピー（あれば）
-      var colgroup = activeTable.querySelector('colgroup');
-      if (colgroup) cloneTable.appendChild(colgroup.cloneNode(true));
-      cloneTable.appendChild(thead.cloneNode(true));
-      bar.appendChild(cloneTable);
-      lastActiveTableId = activeTable.id;
-    }
-
-    // 位置とサイズを同期
-    var wrapperRect = activeWrapper.getBoundingClientRect();
-    bar.style.top = stickyTop + 'px';
-    bar.style.left = wrapperRect.left + 'px';
-    bar.style.width = wrapperRect.width + 'px';
-
-    // 横スクロール同期
-    var cloneTbl = bar.querySelector('table');
-    if (cloneTbl) {
-      cloneTbl.style.marginLeft = (-activeWrapper.scrollLeft) + 'px';
-    }
-
-    bar.style.display = 'block';
   }
 
-  window.addEventListener('scroll', updateStickyBar, { passive: true });
-  ['score-table-out-wrapper', 'score-table-in-wrapper'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener('scroll', function() {
-      lastActiveTableId = null; // 横スクロール時にクローン位置を更新
-      updateStickyBar();
-    }, { passive: true });
-  });
+  function resetTheads() {
+    var theads = document.querySelectorAll('.score-table thead');
+    for (var i = 0; i < theads.length; i++) {
+      theads[i].style.transform = '';
+      theads[i].style.zIndex = '';
+      theads[i].style.position = '';
+      theads[i].style.boxShadow = '';
+    }
+  }
+
+  window.addEventListener('scroll', updateStickyTheads, { passive: true });
 }
 
 // =================== 音声入力 ===================

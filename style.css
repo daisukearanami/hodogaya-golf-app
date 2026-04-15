@@ -2210,20 +2210,6 @@ input, select, button, textarea {
   padding: 16px 24px;
 }
 
-/* =================== STICKY HOLE BAR =================== */
-.sticky-hole-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  z-index: 99;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.sticky-hole-bar .sticky-thead-clone {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-}
-
 /* =================== VOICE INPUT BUTTON =================== */
 .btn-voice-input {
   width: 48px;
