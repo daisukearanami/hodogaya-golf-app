@@ -2213,63 +2213,15 @@ input, select, button, textarea {
 /* =================== STICKY HOLE BAR =================== */
 .sticky-hole-bar {
   position: fixed;
-  top: calc(var(--header-height) + 45px);
   left: 0;
   right: 0;
   z-index: 99;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   pointer-events: none;
+  overflow: hidden;
 }
 
-.sticky-hole-inner {
-  max-width: 480px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0;
-  background: var(--gold-dark);
-  color: var(--white);
-  font-size: 12px;
-  font-weight: 600;
-  font-family: var(--font-display);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  min-width: 520px;
-}
-
-.sticky-hole-label {
-  padding: 6px 0;
-  background: var(--navy);
-  white-space: nowrap;
-  flex: 0 0 50px;
-  font-size: 11px;
-  text-align: center;
-}
-
-.sticky-hole-numbers {
-  display: flex;
-  flex: 1;
-}
-
-.sticky-hole-numbers span {
-  flex: 1;
-  text-align: center;
-  padding: 6px 2px;
-  font-size: 12px;
-  border-right: 1px solid rgba(255,255,255,0.2);
-  min-width: 30px;
-}
-
-.sticky-hole-numbers span:last-child {
-  border-right: none;
-}
-
-.sticky-hole-numbers span.sticky-hole-total {
-  background: var(--maroon);
-  flex: 0 0 44px;
-  min-width: 44px;
+.sticky-hole-bar .sticky-thead-clone {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
 
 /* =================== VOICE INPUT BUTTON =================== */

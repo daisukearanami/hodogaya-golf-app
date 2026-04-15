@@ -3331,88 +3331,99 @@ function showShotStats() {
 
 // =================== スティッキーホールバー ===================
 function initStickyHoleBar() {
-  const bar = document.getElementById('sticky-hole-bar');
+  var bar = document.getElementById('sticky-hole-bar');
   if (!bar) return;
 
+  var lastActiveTableId = null;
+
   function updateStickyBar() {
-    const manualPage = document.getElementById('page-manual');
+    var manualPage = document.getElementById('page-manual');
     if (!manualPage || !manualPage.classList.contains('active')) {
       bar.style.display = 'none';
+      lastActiveTableId = null;
       return;
     }
 
-    const outWrapper = document.getElementById('score-table-out-wrapper');
-    const inWrapper = document.getElementById('score-table-in-wrapper');
-    if (!outWrapper && !inWrapper) { bar.style.display = 'none'; return; }
-
-    const headerBottom = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 56) + 45;
-    let activeWrapper = null;
-    let activeTable = null;
-    let label = '';
-    let startHole = 1;
-
-    // OUT テーブルが画面上部に達しているか
-    if (outWrapper) {
-      const outTable = document.getElementById('score-table-out');
-      const outRect = outWrapper.getBoundingClientRect();
-      if (outRect.top < headerBottom && outRect.bottom > headerBottom + 40) {
-        activeWrapper = outWrapper;
-        activeTable = outTable;
-        label = 'OUT';
-        startHole = 1;
-      }
+    // ページヘッダーの下端を取得
+    var pageHeader = manualPage.querySelector('.page-header');
+    var stickyTop = 56 + 45; // header + page-header の概算
+    if (pageHeader) {
+      var phRect = pageHeader.getBoundingClientRect();
+      stickyTop = phRect.bottom;
     }
 
-    // IN テーブルが画面上部に達しているか（OUTより優先）
-    if (inWrapper) {
-      const inTable = document.getElementById('score-table-in');
-      const inRect = inWrapper.getBoundingClientRect();
-      if (inRect.top < headerBottom && inRect.bottom > headerBottom + 40) {
-        activeWrapper = inWrapper;
-        activeTable = inTable;
-        label = 'IN';
-        startHole = 10;
+    var activeWrapper = null;
+    var activeTable = null;
+
+    // OUT / IN どちらのテーブルが画面上部にかかっているか
+    var pairs = [
+      { wId: 'score-table-out-wrapper', tId: 'score-table-out' },
+      { wId: 'score-table-in-wrapper', tId: 'score-table-in' }
+    ];
+    for (var p = 0; p < pairs.length; p++) {
+      var w = document.getElementById(pairs[p].wId);
+      var t = document.getElementById(pairs[p].tId);
+      if (!w || !t) continue;
+      var wRect = w.getBoundingClientRect();
+      if (wRect.top < stickyTop && wRect.bottom > stickyTop + 30) {
+        activeWrapper = w;
+        activeTable = t;
       }
     }
 
     if (!activeTable) {
       bar.style.display = 'none';
+      lastActiveTableId = null;
       return;
     }
 
-    // theadが画面外にスクロールされた場合のみ表示
-    const thead = activeTable.querySelector('thead');
+    // thead が画面外に隠れている場合のみ表示
+    var thead = activeTable.querySelector('thead');
     if (!thead) { bar.style.display = 'none'; return; }
-    const theadRect = thead.getBoundingClientRect();
-    if (theadRect.bottom > headerBottom) {
+    var theadRect = thead.getBoundingClientRect();
+    if (theadRect.bottom > stickyTop) {
       bar.style.display = 'none';
+      lastActiveTableId = null;
       return;
     }
 
-    // ホール番号を生成
-    const labelEl = document.getElementById('sticky-hole-label');
-    const numbersEl = document.getElementById('sticky-hole-numbers');
-    labelEl.textContent = label;
-
-    let numbersHtml = '';
-    for (let h = 0; h < 9; h++) {
-      numbersHtml += `<span>${startHole + h}</span>`;
+    // thead をクローンして固定表示
+    // テーブルIDが変わった場合 or 初回のみクローンを再作成
+    if (lastActiveTableId !== activeTable.id) {
+      bar.innerHTML = '';
+      var cloneTable = document.createElement('table');
+      cloneTable.className = activeTable.className + ' sticky-thead-clone';
+      cloneTable.style.cssText = 'width:' + activeTable.offsetWidth + 'px; table-layout:fixed;';
+      // colgroup をコピー（あれば）
+      var colgroup = activeTable.querySelector('colgroup');
+      if (colgroup) cloneTable.appendChild(colgroup.cloneNode(true));
+      cloneTable.appendChild(thead.cloneNode(true));
+      bar.appendChild(cloneTable);
+      lastActiveTableId = activeTable.id;
     }
-    numbersHtml += '<span class="sticky-hole-total">計</span>';
-    numbersEl.innerHTML = numbersHtml;
 
-    // テーブルの横スクロールに同期
-    const scrollLeft = activeWrapper.scrollLeft;
-    numbersEl.parentElement.scrollLeft = scrollLeft;
+    // 位置とサイズを同期
+    var wrapperRect = activeWrapper.getBoundingClientRect();
+    bar.style.top = stickyTop + 'px';
+    bar.style.left = wrapperRect.left + 'px';
+    bar.style.width = wrapperRect.width + 'px';
+
+    // 横スクロール同期
+    var cloneTbl = bar.querySelector('table');
+    if (cloneTbl) {
+      cloneTbl.style.marginLeft = (-activeWrapper.scrollLeft) + 'px';
+    }
 
     bar.style.display = 'block';
   }
 
   window.addEventListener('scroll', updateStickyBar, { passive: true });
-  // score-table-wrapper の横スクロールにも追従
-  ['score-table-out-wrapper', 'score-table-in-wrapper'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('scroll', updateStickyBar, { passive: true });
+  ['score-table-out-wrapper', 'score-table-in-wrapper'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('scroll', function() {
+      lastActiveTableId = null; // 横スクロール時にクローン位置を更新
+      updateStickyBar();
+    }, { passive: true });
   });
 }
 
@@ -3533,9 +3544,66 @@ function toggleVoiceRecording() {
   voiceRecognition.start();
 }
 
+function japaneseToNumber(str) {
+  // 漢数字マッピング
+  var kanjiMap = { '零':0,'〇':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10 };
+  // ひらがな/カタカナ数字マッピング
+  var kanaMap = {
+    'いち':1,'に':2,'さん':3,'し':4,'よん':4,'ご':5,'ろく':6,
+    'しち':7,'なな':7,'はち':8,'きゅう':9,'く':9,'きゅ':9,
+    'じゅう':10,'じゅ':10,'とお':10,
+    'じゅういち':11,'じゅうに':12,'じゅうさん':13,'じゅうし':14,'じゅうよん':14,
+    'じゅうご':15,'じゅうろく':16,'じゅうしち':17,'じゅうなな':17,
+    'じゅうはち':18,'じゅうきゅう':19,'じゅうく':19,'にじゅう':20,
+    'イチ':1,'ニ':2,'サン':3,'シ':4,'ヨン':4,'ゴ':5,'ロク':6,
+    'シチ':7,'ナナ':7,'ハチ':8,'キュウ':9,'ク':9,
+    'ジュウ':10,'ジュウイチ':11,'ジュウニ':12,'ジュウサン':13,
+    'ジュウヨン':14,'ジュウゴ':15,'ジュウロク':16,'ジュウナナ':17,
+    'ジュウハチ':18,'ジュウキュウ':19,'ニジュウ':20
+  };
+  var s = str.trim();
+
+  // まず半角数字として解析を試みる
+  var directNum = parseInt(s);
+  if (!isNaN(directNum)) return directNum;
+
+  // かなマッピング（長いキーから先にチェック）
+  var kanaKeys = Object.keys(kanaMap).sort(function(a,b){ return b.length - a.length; });
+  for (var i = 0; i < kanaKeys.length; i++) {
+    if (s === kanaKeys[i]) return kanaMap[kanaKeys[i]];
+  }
+
+  // 漢数字の組み合わせ解析（十六 → 16 等）
+  if (s.indexOf('十') >= 0) {
+    var parts = s.split('十');
+    var tens = parts[0] ? (kanjiMap[parts[0]] || 1) : 1;
+    var ones = parts[1] ? (kanjiMap[parts[1]] || 0) : 0;
+    return tens * 10 + ones;
+  }
+
+  // 単一漢数字
+  if (kanjiMap[s] !== undefined) return kanjiMap[s];
+
+  // 漢数字が並んでいる場合（一五 → 15 等、あまりないが念のため）
+  var result = '';
+  for (var i = 0; i < s.length; i++) {
+    if (kanjiMap[s[i]] !== undefined) {
+      result += kanjiMap[s[i]];
+    } else {
+      return NaN;
+    }
+  }
+  return result.length > 0 ? parseInt(result) : NaN;
+}
+
+function normalizeTranscriptNumbers(text) {
+  // 全角数字を半角に
+  text = text.replace(/[０-９]/g, function(ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFFF0); });
+  return text;
+}
+
 function parseVoiceInput(transcript) {
-  // 全角数字を半角に変換
-  let text = transcript.replace(/[０-９]/g, function(ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFFF0); });
+  var text = normalizeTranscriptNumbers(transcript);
   // 句読点・読点・カンマ・スペースで分割
   var tokens = text.split(/[、,，。.\s　]+/).filter(function(t) { return t.length > 0; });
 
@@ -3543,21 +3611,22 @@ function parseVoiceInput(transcript) {
   var holeNum = null;
   var scores = [];
 
+  // トークンを数値に変換するヘルパー（日本語対応）
+  function tokenToNum(t) {
+    var n = japaneseToNumber(t);
+    if (!isNaN(n)) return n;
+    // 「ホール」「番」を除去してリトライ
+    var cleaned = t.replace(/[ホールhH番]/gi, '');
+    return japaneseToNumber(cleaned);
+  }
+
   if (voiceMode === 'simple') {
     // シンプルモード: 最初のトークンがホール番号、以降がスコア
     for (var i = 0; i < tokens.length; i++) {
-      var num = parseInt(tokens[i]);
+      var num = tokenToNum(tokens[i]);
       if (i === 0) {
-        // 最初の数字はホール番号
         if (!isNaN(num) && num >= 1 && num <= 18) {
           holeNum = num;
-        } else {
-          // 「ホール」「番」などのプレフィックスを除去して再試行
-          var cleaned = tokens[i].replace(/[ホールhH番]/gi, '');
-          var n = parseInt(cleaned);
-          if (!isNaN(n) && n >= 1 && n <= 18) {
-            holeNum = n;
-          }
         }
       } else {
         if (!isNaN(num) && num >= 1 && num <= 20) {
@@ -3570,8 +3639,7 @@ function parseVoiceInput(transcript) {
     var i = 0;
     // ホール番号を探す
     while (i < tokens.length) {
-      var cleaned = tokens[i].replace(/[ホールhH番]/gi, '');
-      var num = parseInt(cleaned);
+      var num = tokenToNum(tokens[i]);
       if (!isNaN(num) && num >= 1 && num <= 18) {
         holeNum = num;
         i++;
@@ -3583,10 +3651,10 @@ function parseVoiceInput(transcript) {
     // 残りのトークンから名前・スコアを解析
     while (i < tokens.length) {
       var token = tokens[i];
-      var num = parseInt(token);
+      var num = tokenToNum(token);
 
       if (!isNaN(num) && num >= 1 && num <= 20) {
-        // 数字のみ→直前に名前がなければプレーヤー順
+        // 数字のみ→プレーヤー順
         scores.push({ playerIdx: scores.length, name: names[scores.length] || ('P' + (scores.length + 1)), score: num });
       } else {
         // 名前が含まれる可能性 → トークン内に数字が埋め込まれているか
@@ -3601,7 +3669,7 @@ function parseVoiceInput(transcript) {
         } else {
           // 次のトークンがスコアかもしれない
           if (i + 1 < tokens.length) {
-            var nextNum = parseInt(tokens[i + 1]);
+            var nextNum = tokenToNum(tokens[i + 1]);
             if (!isNaN(nextNum) && nextNum >= 1 && nextNum <= 20) {
               var pidx = findPlayerIndex(token, names);
               if (pidx >= 0) {
