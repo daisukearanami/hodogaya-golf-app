@@ -2394,36 +2394,36 @@ function openNumpad(input) {
       }
     }
 
-    // 縦スクロール：テーブルの thead が見える位置にスクロール
-    // thead（ホール番号＋PAR行）が常に画面内に表示されるよう、
-    // テーブル上端を基準にスクロールする
+    // 縦スクロール：アクティブセルとthead両方が可視領域に入るよう最小限スクロール
     const table = input.closest('table');
     const thead = table ? table.querySelector('thead') : null;
     if (thead) {
-      const theadRect = thead.getBoundingClientRect();
       const visibleTop = 100; // app-header + page-header の高さ概算
       const visibleBottom = window.innerHeight - numpadHeight;
       const cellRect = input.getBoundingClientRect();
+      const theadRect = thead.getBoundingClientRect();
 
-      // thead が画面上部より上に隠れている場合、thead が見えるようにスクロール
-      if (theadRect.top < visibleTop) {
+      // セルがナンバーパッドの下に隠れている場合
+      if (cellRect.bottom > visibleBottom) {
+        // セルが見えるのに必要な最小スクロール量
+        const needed = cellRect.bottom - visibleBottom + 10;
+        // そのスクロールでtheadが隠れないか確認
+        if (theadRect.top - needed >= visibleTop) {
+          // theadも見える → そのままスクロール
+          window.scrollTo({ top: window.scrollY + needed, behavior: 'smooth' });
+        } else {
+          // theadが隠れてしまう → theadをギリギリ見せる位置までだけスクロール
+          const maxScroll = Math.max(0, theadRect.top - visibleTop);
+          if (maxScroll > 5) {
+            window.scrollTo({ top: window.scrollY + maxScroll, behavior: 'smooth' });
+          }
+          // セルがまだ隠れていても、theadを優先してこれ以上スクロールしない
+        }
+      }
+      // theadが画面上部より上に隠れている場合、theadが見えるように上にスクロール
+      else if (theadRect.top < visibleTop) {
         const scrollUp = visibleTop - theadRect.top;
         window.scrollTo({ top: Math.max(0, window.scrollY - scrollUp), behavior: 'smooth' });
-      }
-      // セルがナンバーパッドの下に隠れている場合、テーブルごと上にスクロール
-      // ただし thead が隠れない範囲で
-      else if (cellRect.bottom > visibleBottom) {
-        // セルを表示するために必要なスクロール量
-        const scrollDown = cellRect.bottom - visibleBottom + 20;
-        // thead がまだ見えるか確認
-        const newTheadTop = theadRect.top - scrollDown;
-        if (newTheadTop >= visibleTop) {
-          window.scrollTo({ top: window.scrollY + scrollDown, behavior: 'smooth' });
-        } else {
-          // thead が隠れてしまう場合は、thead上端をvisibleTopに合わせる
-          const maxScroll = theadRect.top - visibleTop;
-          window.scrollTo({ top: window.scrollY + maxScroll, behavior: 'smooth' });
-        }
       }
     }
   });
