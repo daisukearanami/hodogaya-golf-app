@@ -354,10 +354,15 @@
 
         <!-- スコア入力ボタン -->
         <div style="text-align:center; margin-bottom:12px;">
-          <button class="btn-primary" onclick="startScoreEntry()" style="max-width:320px; margin:0 auto;">
-            <i class="fas fa-th"></i>
-            <span>スコアを入力する</span>
-          </button>
+          <div style="display:flex; gap:8px; justify-content:center; max-width:320px; margin:0 auto;">
+            <button class="btn-primary" onclick="startScoreEntry()" style="flex:1;">
+              <i class="fas fa-th"></i>
+              <span>スコアを入力する</span>
+            </button>
+            <button class="btn-voice-input" onclick="startVoiceInput()" title="音声入力">
+              <i class="fas fa-microphone"></i>
+            </button>
+          </div>
           <p style="font-size:12px; color:#666; margin-top:6px;">テーブルのセルを直接タップしても入力できます</p>
         </div>
 
@@ -522,6 +527,60 @@
           <i class="fas fa-calculator"></i>
           <span>ゲームを計算する</span>
         </button>
+      </div>
+
+      <!-- スティッキーホール表示バー -->
+      <div id="sticky-hole-bar" class="sticky-hole-bar" style="display:none;">
+        <div class="sticky-hole-inner">
+          <span class="sticky-hole-label" id="sticky-hole-label">OUT</span>
+          <span class="sticky-hole-numbers" id="sticky-hole-numbers"></span>
+        </div>
+      </div>
+
+      <!-- 音声入力モーダル -->
+      <div id="voice-input-modal" class="voice-input-modal" style="display:none;">
+        <div class="voice-backdrop" onclick="cancelVoiceInput()"></div>
+        <div class="voice-sheet">
+          <div class="voice-header">
+            <h3>音声入力</h3>
+            <button class="voice-close" onclick="cancelVoiceInput()"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="voice-mode-selector">
+            <button class="voice-mode-btn active" data-mode="simple" onclick="setVoiceMode('simple')">
+              <i class="fas fa-bolt"></i> スコアのみ
+            </button>
+            <button class="voice-mode-btn" data-mode="named" onclick="setVoiceMode('named')">
+              <i class="fas fa-user"></i> 名前＋スコア
+            </button>
+          </div>
+          <div class="voice-instructions" id="voice-instructions">
+            <p><strong>スコアのみモード:</strong></p>
+            <p>「ホール番号、スコア、スコア、...」の順に読み上げてください</p>
+            <p class="voice-example">例: 「10、5、4、6、5」</p>
+          </div>
+          <div class="voice-status" id="voice-status">
+            <div class="voice-mic-icon" id="voice-mic-icon">
+              <i class="fas fa-microphone"></i>
+            </div>
+            <p id="voice-status-text">マイクボタンを押して開始</p>
+          </div>
+          <div class="voice-transcript" id="voice-transcript" style="display:none;">
+            <p class="voice-transcript-label">認識結果:</p>
+            <p class="voice-transcript-text" id="voice-transcript-text"></p>
+          </div>
+          <div class="voice-parsed" id="voice-parsed" style="display:none;">
+            <p class="voice-parsed-label">解析結果:</p>
+            <div id="voice-parsed-content"></div>
+          </div>
+          <div class="voice-actions">
+            <button class="btn-voice-record" id="btn-voice-record" onclick="toggleVoiceRecording()">
+              <i class="fas fa-microphone"></i> 録音開始
+            </button>
+            <button class="btn-voice-apply" id="btn-voice-apply" onclick="applyVoiceInput()" style="display:none;">
+              <i class="fas fa-check"></i> 反映する
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- スコア入力ナンバーパッド -->

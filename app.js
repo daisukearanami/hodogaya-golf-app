@@ -597,7 +597,8 @@ function calculateBestGame(players) {
     });
 
     // 次のホールのキャリーオーバー設定（1ホール限定）
-    if (triggerCarryOver && !isCarryOver) {
+    // 連続COの場合も、当該ホール自体のCOは次の1ホールに持ち越す
+    if (triggerCarryOver) {
       nextCarryOver = true;
     }
   }
@@ -3328,6 +3329,364 @@ function showShotStats() {
   container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// =================== スティッキーホールバー ===================
+function initStickyHoleBar() {
+  const bar = document.getElementById('sticky-hole-bar');
+  if (!bar) return;
+
+  function updateStickyBar() {
+    const manualPage = document.getElementById('page-manual');
+    if (!manualPage || !manualPage.classList.contains('active')) {
+      bar.style.display = 'none';
+      return;
+    }
+
+    const outWrapper = document.getElementById('score-table-out-wrapper');
+    const inWrapper = document.getElementById('score-table-in-wrapper');
+    if (!outWrapper && !inWrapper) { bar.style.display = 'none'; return; }
+
+    const headerBottom = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) || 56) + 45;
+    let activeWrapper = null;
+    let activeTable = null;
+    let label = '';
+    let startHole = 1;
+
+    // OUT テーブルが画面上部に達しているか
+    if (outWrapper) {
+      const outTable = document.getElementById('score-table-out');
+      const outRect = outWrapper.getBoundingClientRect();
+      if (outRect.top < headerBottom && outRect.bottom > headerBottom + 40) {
+        activeWrapper = outWrapper;
+        activeTable = outTable;
+        label = 'OUT';
+        startHole = 1;
+      }
+    }
+
+    // IN テーブルが画面上部に達しているか（OUTより優先）
+    if (inWrapper) {
+      const inTable = document.getElementById('score-table-in');
+      const inRect = inWrapper.getBoundingClientRect();
+      if (inRect.top < headerBottom && inRect.bottom > headerBottom + 40) {
+        activeWrapper = inWrapper;
+        activeTable = inTable;
+        label = 'IN';
+        startHole = 10;
+      }
+    }
+
+    if (!activeTable) {
+      bar.style.display = 'none';
+      return;
+    }
+
+    // theadが画面外にスクロールされた場合のみ表示
+    const thead = activeTable.querySelector('thead');
+    if (!thead) { bar.style.display = 'none'; return; }
+    const theadRect = thead.getBoundingClientRect();
+    if (theadRect.bottom > headerBottom) {
+      bar.style.display = 'none';
+      return;
+    }
+
+    // ホール番号を生成
+    const labelEl = document.getElementById('sticky-hole-label');
+    const numbersEl = document.getElementById('sticky-hole-numbers');
+    labelEl.textContent = label;
+
+    let numbersHtml = '';
+    for (let h = 0; h < 9; h++) {
+      numbersHtml += `<span>${startHole + h}</span>`;
+    }
+    numbersHtml += '<span class="sticky-hole-total">計</span>';
+    numbersEl.innerHTML = numbersHtml;
+
+    // テーブルの横スクロールに同期
+    const scrollLeft = activeWrapper.scrollLeft;
+    numbersEl.parentElement.scrollLeft = scrollLeft;
+
+    bar.style.display = 'block';
+  }
+
+  window.addEventListener('scroll', updateStickyBar, { passive: true });
+  // score-table-wrapper の横スクロールにも追従
+  ['score-table-out-wrapper', 'score-table-in-wrapper'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('scroll', updateStickyBar, { passive: true });
+  });
+}
+
+// =================== 音声入力 ===================
+let voiceRecognition = null;
+let voiceMode = 'simple'; // 'simple' or 'named'
+let voiceParsedData = null;
+
+function startVoiceInput() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('お使いのブラウザは音声入力に対応していません');
+    return;
+  }
+  document.getElementById('voice-input-modal').style.display = 'flex';
+  resetVoiceUI();
+}
+
+function cancelVoiceInput() {
+  if (voiceRecognition) {
+    voiceRecognition.abort();
+    voiceRecognition = null;
+  }
+  document.getElementById('voice-input-modal').style.display = 'none';
+  resetVoiceUI();
+}
+
+function resetVoiceUI() {
+  document.getElementById('voice-mic-icon').classList.remove('recording');
+  document.getElementById('btn-voice-record').classList.remove('recording');
+  document.getElementById('btn-voice-record').innerHTML = '<i class="fas fa-microphone"></i> 録音開始';
+  document.getElementById('voice-status-text').textContent = 'マイクボタンを押して開始';
+  document.getElementById('voice-transcript').style.display = 'none';
+  document.getElementById('voice-parsed').style.display = 'none';
+  document.getElementById('btn-voice-apply').style.display = 'none';
+  voiceParsedData = null;
+}
+
+function setVoiceMode(mode) {
+  voiceMode = mode;
+  document.querySelectorAll('.voice-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  const instructions = document.getElementById('voice-instructions');
+  if (mode === 'simple') {
+    instructions.innerHTML = `
+      <p><strong>スコアのみモード:</strong></p>
+      <p>「ホール番号、スコア、スコア、...」の順に読み上げてください</p>
+      <p class="voice-example">例: 「10、5、4、6、5」</p>`;
+  } else {
+    instructions.innerHTML = `
+      <p><strong>名前＋スコアモード:</strong></p>
+      <p>「ホール番号、名前 スコア、名前 スコア、...」の順に読み上げてください</p>
+      <p class="voice-example">例: 「10、荒濤 5、佐久間 4、上野 6、佐藤 5」</p>`;
+  }
+  resetVoiceUI();
+}
+
+function toggleVoiceRecording() {
+  if (voiceRecognition) {
+    voiceRecognition.stop();
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  voiceRecognition = new SpeechRecognition();
+  voiceRecognition.lang = 'ja-JP';
+  voiceRecognition.interimResults = true;
+  voiceRecognition.continuous = true;
+  voiceRecognition.maxAlternatives = 1;
+
+  let finalTranscript = '';
+
+  document.getElementById('voice-mic-icon').classList.add('recording');
+  document.getElementById('btn-voice-record').classList.add('recording');
+  document.getElementById('btn-voice-record').innerHTML = '<i class="fas fa-stop"></i> 録音停止';
+  document.getElementById('voice-status-text').textContent = '聞いています...';
+  document.getElementById('voice-transcript').style.display = 'block';
+  document.getElementById('voice-transcript-text').textContent = '';
+
+  voiceRecognition.onresult = function(event) {
+    let interim = '';
+    finalTranscript = '';
+    for (let i = 0; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interim += event.results[i][0].transcript;
+      }
+    }
+    document.getElementById('voice-transcript-text').textContent = finalTranscript + interim;
+  };
+
+  voiceRecognition.onend = function() {
+    voiceRecognition = null;
+    document.getElementById('voice-mic-icon').classList.remove('recording');
+    document.getElementById('btn-voice-record').classList.remove('recording');
+    document.getElementById('btn-voice-record').innerHTML = '<i class="fas fa-microphone"></i> 再録音';
+    document.getElementById('voice-status-text').textContent = '録音完了';
+
+    const transcript = document.getElementById('voice-transcript-text').textContent.trim();
+    if (transcript) {
+      parseVoiceInput(transcript);
+    }
+  };
+
+  voiceRecognition.onerror = function(event) {
+    voiceRecognition = null;
+    document.getElementById('voice-mic-icon').classList.remove('recording');
+    document.getElementById('btn-voice-record').classList.remove('recording');
+    document.getElementById('btn-voice-record').innerHTML = '<i class="fas fa-microphone"></i> 再録音';
+    if (event.error === 'not-allowed') {
+      document.getElementById('voice-status-text').textContent = 'マイクのアクセスが拒否されました';
+    } else {
+      document.getElementById('voice-status-text').textContent = 'エラー: ' + event.error;
+    }
+  };
+
+  voiceRecognition.start();
+}
+
+function parseVoiceInput(transcript) {
+  // 全角数字を半角に変換
+  let text = transcript.replace(/[０-９]/g, function(ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFFF0); });
+  // 句読点・読点・カンマ・スペースで分割
+  var tokens = text.split(/[、,，。.\s　]+/).filter(function(t) { return t.length > 0; });
+
+  var names = getPlayerNames();
+  var holeNum = null;
+  var scores = [];
+
+  if (voiceMode === 'simple') {
+    // シンプルモード: 最初のトークンがホール番号、以降がスコア
+    for (var i = 0; i < tokens.length; i++) {
+      var num = parseInt(tokens[i]);
+      if (i === 0) {
+        // 最初の数字はホール番号
+        if (!isNaN(num) && num >= 1 && num <= 18) {
+          holeNum = num;
+        } else {
+          // 「ホール」「番」などのプレフィックスを除去して再試行
+          var cleaned = tokens[i].replace(/[ホールhH番]/gi, '');
+          var n = parseInt(cleaned);
+          if (!isNaN(n) && n >= 1 && n <= 18) {
+            holeNum = n;
+          }
+        }
+      } else {
+        if (!isNaN(num) && num >= 1 && num <= 20) {
+          scores.push({ playerIdx: scores.length, name: names[scores.length] || ('P' + (scores.length + 1)), score: num });
+        }
+      }
+    }
+  } else {
+    // 名前＋スコアモード: ホール番号の後に「名前 スコア」のペア
+    var i = 0;
+    // ホール番号を探す
+    while (i < tokens.length) {
+      var cleaned = tokens[i].replace(/[ホールhH番]/gi, '');
+      var num = parseInt(cleaned);
+      if (!isNaN(num) && num >= 1 && num <= 18) {
+        holeNum = num;
+        i++;
+        break;
+      }
+      i++;
+    }
+
+    // 残りのトークンから名前・スコアを解析
+    while (i < tokens.length) {
+      var token = tokens[i];
+      var num = parseInt(token);
+
+      if (!isNaN(num) && num >= 1 && num <= 20) {
+        // 数字のみ→直前に名前がなければプレーヤー順
+        scores.push({ playerIdx: scores.length, name: names[scores.length] || ('P' + (scores.length + 1)), score: num });
+      } else {
+        // 名前が含まれる可能性 → トークン内に数字が埋め込まれているか
+        var nameNumMatch = token.match(/^(.+?)(\d+)$/);
+        if (nameNumMatch) {
+          var spokenName = nameNumMatch[1];
+          var score = parseInt(nameNumMatch[2]);
+          var pidx = findPlayerIndex(spokenName, names);
+          if (pidx >= 0 && !isNaN(score) && score >= 1 && score <= 20) {
+            scores.push({ playerIdx: pidx, name: names[pidx], score: score });
+          }
+        } else {
+          // 次のトークンがスコアかもしれない
+          if (i + 1 < tokens.length) {
+            var nextNum = parseInt(tokens[i + 1]);
+            if (!isNaN(nextNum) && nextNum >= 1 && nextNum <= 20) {
+              var pidx = findPlayerIndex(token, names);
+              if (pidx >= 0) {
+                scores.push({ playerIdx: pidx, name: names[pidx], score: nextNum });
+                i++;
+              }
+            }
+          }
+        }
+      }
+      i++;
+    }
+  }
+
+  if (holeNum === null) {
+    document.getElementById('voice-status-text').textContent = 'ホール番号を認識できませんでした';
+    return;
+  }
+
+  if (scores.length === 0) {
+    document.getElementById('voice-status-text').textContent = 'スコアを認識できませんでした';
+    return;
+  }
+
+  voiceParsedData = { holeNum: holeNum, scores: scores };
+
+  // 解析結果を表示
+  var parsedDiv = document.getElementById('voice-parsed');
+  var parsedContent = document.getElementById('voice-parsed-content');
+  var html = '<p style="margin-bottom:8px; font-weight:600;">ホール ' + holeNum + '</p>';
+  html += '<table class="voice-parsed-table"><tr><th>プレーヤー</th><th>スコア</th></tr>';
+  scores.forEach(function(s) {
+    html += '<tr><td>' + s.name + '</td><td class="voice-score-val">' + s.score + '</td></tr>';
+  });
+  html += '</table>';
+  parsedContent.innerHTML = html;
+  parsedDiv.style.display = 'block';
+  document.getElementById('btn-voice-apply').style.display = 'block';
+}
+
+function findPlayerIndex(spokenName, names) {
+  // 完全一致
+  var exactIdx = names.findIndex(function(n) { return n === spokenName; });
+  if (exactIdx >= 0) return exactIdx;
+
+  // 部分一致（名前の一部）
+  var partialIdx = names.findIndex(function(n) { return n.includes(spokenName) || spokenName.includes(n); });
+  if (partialIdx >= 0) return partialIdx;
+
+  // 小文字比較
+  var lowerSpoken = spokenName.toLowerCase();
+  var lowerIdx = names.findIndex(function(n) { return n.toLowerCase().includes(lowerSpoken) || lowerSpoken.includes(n.toLowerCase()); });
+  return lowerIdx;
+}
+
+function applyVoiceInput() {
+  if (!voiceParsedData) return;
+  var holeNum = voiceParsedData.holeNum;
+  var scores = voiceParsedData.scores;
+
+  var isOut = holeNum <= 9;
+  var tableId = isOut ? 'score-table-out' : 'score-table-in';
+  var holeIdx = isOut ? holeNum - 1 : holeNum - 10;
+  var table = document.getElementById(tableId);
+  if (!table) { showToast('テーブルが見つかりません'); return; }
+
+  var rows = table.querySelectorAll('tbody tr');
+
+  scores.forEach(function(s) {
+    var pidx = s.playerIdx;
+    if (pidx < 0 || pidx >= rows.length) return;
+    var inputs = rows[pidx].querySelectorAll('.score-input');
+    if (inputs[holeIdx]) {
+      inputs[holeIdx].value = s.score;
+      inputs[holeIdx].dispatchEvent(new Event('input', { bubbles: true }));
+      colorizeScoreInput(inputs[holeIdx]);
+    }
+  });
+
+  calculateTableTotals(tableId);
+
+  showToast('ホール' + holeNum + 'のスコアを入力しました');
+  cancelVoiceInput();
+}
+
 // =================== 初期化 ===================
 document.addEventListener('DOMContentLoaded', function() {
   try {
@@ -3364,6 +3723,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ショットトラッカー初期化
     initShotTracker();
+
+    // スティッキーホールバー初期化
+    initStickyHoleBar();
 
     console.log('程ヶ谷CC Game Tsuru Han initialized');
   } catch (e) {
