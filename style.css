@@ -454,6 +454,12 @@ input, select, button, textarea {
   color: rgba(255,255,255,0.7);
 }
 
+/* =================== ROUND COUNT SELECTOR =================== */
+.round-count-selector {
+  display: flex;
+  gap: 10px;
+}
+
 /* =================== TEAM RATE SELECTOR =================== */
 .team-rate-section {
   position: relative;

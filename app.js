@@ -9,6 +9,7 @@ let startCourse = 'IN'; // 'OUT' or 'IN'
 let selectedGreen = 'A'; // 'A' or 'B'
 let selectedTee = 'regular'; // 'back', 'regular', 'front', 'gold'
 let teamBackRate = 15; // 15 (ツル半) or 20 (2ツル)
+let roundCount = 1; // 1 or 2
 
 // =================== ヤーデージデータ（程ヶ谷CC公式） ===================
 const YARD_DATA = {
@@ -96,6 +97,10 @@ function setPlayerCount(count) {
   renderPlayerInputs();
   renderScoreTable('score-table-out', PAR_OUT, 1);
   renderScoreTable('score-table-in', PAR_IN, 10);
+  if (roundCount === 2) {
+    renderScoreTable('score-table-out-r2', PAR_OUT, 1);
+    renderScoreTable('score-table-in-r2', PAR_IN, 10);
+  }
   
   // バッジ更新
   const badge = document.getElementById('player-count-badge');
@@ -106,7 +111,7 @@ function setPlayerCount(count) {
 function setStartCourse(course) {
   startCourse = course;
   localStorage.setItem('hodogaya_start_course', course);
-  document.querySelectorAll('.start-course-btn').forEach(btn => {
+  document.querySelectorAll('#start-course-selector .start-course-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.course === course);
   });
 }
@@ -139,6 +144,29 @@ function updateTeamRateVisibility() {
   const section = document.getElementById('team-rate-section');
   if (!section) return;
   section.style.display = (playerCount === 4) ? '' : 'none';
+}
+
+// =================== ラウンド数設定 ===================
+function setRoundCount(count) {
+  roundCount = count;
+  localStorage.setItem('hodogaya_round_count', String(count));
+
+  document.querySelectorAll('#round-count-selector .start-course-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.rounds) === count);
+  });
+
+  // R2テーブルの表示/非表示
+  document.querySelectorAll('.round2-section').forEach(el => {
+    el.style.display = count === 2 ? '' : 'none';
+  });
+
+  // 2R選択時にR2テーブルを構築
+  if (count === 2) {
+    renderScoreTable('score-table-out-r2', PAR_OUT, 1);
+    renderScoreTable('score-table-in-r2', PAR_IN, 10);
+    makeScoreInputsReadonly();
+    colorizeAllScoreInputs();
+  }
 }
 
 function updateTeeTotalDisplay() {
@@ -225,7 +253,9 @@ function getActiveGames() {
 }
 
 // =================== データ収集 ===================
-function collectPlayerData() {
+function collectPlayerData(outTableId, inTableId) {
+  outTableId = outTableId || 'score-table-out';
+  inTableId = inTableId || 'score-table-in';
   const players = [];
   const nameInputs = document.querySelectorAll('.player-name-input');
   const hdcpInputs = document.querySelectorAll('.input-hdcp');
@@ -234,7 +264,7 @@ function collectPlayerData() {
     const scoresOut = [];
     const scoresIn = [];
 
-    const outTable = document.getElementById('score-table-out');
+    const outTable = document.getElementById(outTableId);
     const outRow = outTable?.querySelectorAll('tbody tr')[i];
     if (outRow) {
       outRow.querySelectorAll('.score-input').forEach(inp => {
@@ -242,7 +272,7 @@ function collectPlayerData() {
       });
     }
 
-    const inTable = document.getElementById('score-table-in');
+    const inTable = document.getElementById(inTableId);
     const inRow = inTable?.querySelectorAll('tbody tr')[i];
     if (inRow) {
       inRow.querySelectorAll('.score-input').forEach(inp => {
@@ -1081,6 +1111,140 @@ function renderResultPage(players, teamResult, individualResult, bestResult, nak
   container.innerHTML = html;
 }
 
+// =================== 2R用ポイント行計算 ===================
+function computeGamePointRows(players, results, labelPrefix) {
+  const rows = [];
+  const prefix = labelPrefix || '';
+
+  if (results.teamResult) {
+    const tr = results.teamResult;
+    const isOutStart = startCourse === 'OUT';
+    const backResults = isOutStart ? tr.results.slice(9) : tr.results.slice(0, 9);
+    const backPoints = backResults.reduce((s, r) => s + r.points, 0);
+    const backWinner = backPoints > 0 ? 'L' : (backPoints < 0 ? 'R' : null);
+    const lPt = backWinner === 'L' ? teamBackRate : (backWinner === 'R' ? -teamBackRate : 0);
+    const rPt = backWinner === 'R' ? teamBackRate : (backWinner === 'L' ? -teamBackRate : 0);
+    const pts = {};
+    tr.teams.teamL.forEach(p => { pts[p.index] = lPt; });
+    tr.teams.teamR.forEach(p => { pts[p.index] = rPt; });
+    rows.push({ label: prefix + '団体戦', pts });
+  }
+
+  if (results.nakanukiResult) {
+    const pts = {};
+    players.forEach(p => { pts[p.index] = results.nakanukiResult.totalPts[p.index] || 0; });
+    rows.push({ label: prefix + '中抜き', pts });
+  }
+
+  if (results.individualVResult) {
+    const pts = {};
+    players.forEach(p => { pts[p.index] = results.individualVResult.totalPts[p.index] || 0; });
+    rows.push({ label: prefix + '個人戦（タテ）', pts });
+  }
+
+  if (results.individualResult) {
+    const lbl = playerCount === 2 ? '個人戦（ヨコ）' : '個人戦';
+    const pts = {};
+    players.forEach(p => { pts[p.index] = results.individualResult.pointsByPlayer[p.index].sum; });
+    rows.push({ label: prefix + lbl, pts });
+  }
+
+  if (results.bestResult) {
+    const pts = {};
+    players.forEach(p => { pts[p.index] = results.bestResult.playerPoints[p.index]; });
+    rows.push({ label: prefix + 'ベスト', pts });
+  }
+
+  return rows;
+}
+
+function renderRoundGameResults(results, players) {
+  let html = '';
+  if (results.teamResult) {
+    html += renderTeamGameResult(results.teamResult, players);
+  }
+  if (results.nakanukiResult) {
+    html += renderNakanukiGameResult(results.nakanukiResult, players);
+  }
+  if (results.individualVResult) {
+    html += renderIndividualVGameResult(results.individualVResult, players);
+  }
+  if (results.individualResult) {
+    html += renderIndividualGameResult(results.individualResult, players);
+  }
+  if (results.bestResult) {
+    html += renderBestGameResult(results.bestResult, players);
+  }
+  return html;
+}
+
+// =================== 2R結果ページ描画 ===================
+function renderResultPage2R(playersR1, r1, playersR2, r2) {
+  // --- スコアサマリー（R1+R2合算） ---
+  const combinedPlayers = playersR1.map((p, i) => ({
+    ...p,
+    totalR1: p.total,
+    totalR2: playersR2[i].total,
+    total: p.total + playersR2[i].total,
+    net: p.net + playersR2[i].net,
+  }));
+  const sorted = [...combinedPlayers].sort((a, b) => a.net - b.net);
+  const summaryCards = document.querySelector('.summary-cards');
+  if (summaryCards) {
+    const rankClasses = ['rank-1','rank-2','rank-3','rank-4'];
+    const ordinals = ['1st','2nd','3rd','4th'];
+    let html = '';
+    sorted.forEach((p, i) => {
+      html += `
+        <div class="summary-card ${rankClasses[i] || ''}">
+          <div class="rank-badge">${ordinals[i] || (i+1)}</div>
+          <div class="player-name">${p.name}</div>
+          <div class="player-score">${p.total}</div>
+          <div class="player-detail">HDCP ${p.hdcp} / NET ${p.net}</div>
+          <div class="player-detail" style="font-size:11px; color:#999;">1R: ${p.totalR1} / 2R: ${p.totalR2}</div>
+        </div>`;
+    });
+    summaryCards.innerHTML = html;
+  }
+
+  // --- ゲーム結果 ---
+  const container = document.getElementById('game-results-container');
+  if (!container) return;
+
+  // ポイント行を計算
+  const gameRowsR1 = computeGamePointRows(playersR1, r1, '1R ');
+  const gameRowsR2 = computeGamePointRows(playersR2, r2, '2R ');
+  const allGameRows = [...gameRowsR1, ...gameRowsR2];
+
+  const grandTotal = {};
+  playersR1.forEach(p => { grandTotal[p.index] = 0; });
+  allGameRows.forEach(row => {
+    playersR1.forEach(p => { grandTotal[p.index] += row.pts[p.index] || 0; });
+  });
+
+  let html = '';
+
+  // 合計ポイント
+  if (allGameRows.length > 0) {
+    html += renderGrandTotal(playersR1, allGameRows, grandTotal);
+  }
+
+  // 1R結果
+  html += `<div style="background:var(--navy-pale); padding:10px 16px; margin:16px -16px 0; border-radius:8px;">
+    <h4 style="margin:0; color:var(--navy); font-size:16px;"><i class="fas fa-flag" style="margin-right:6px;"></i>1R 結果</h4></div>`;
+  html += renderRoundGameResults(r1, playersR1);
+
+  // 2R結果
+  html += `<div style="background:var(--navy-pale); padding:10px 16px; margin:16px -16px 0; border-radius:8px;">
+    <h4 style="margin:0; color:var(--navy); font-size:16px;"><i class="fas fa-flag" style="margin-right:6px;"></i>2R 結果</h4></div>`;
+  html += renderRoundGameResults(r2, playersR2);
+
+  if (!html) {
+    html = '<p class="no-results">ゲーム結果はありません</p>';
+  }
+  container.innerHTML = html;
+}
+
 // =================== 全ゲーム合計ポイント ===================
 function renderGrandTotal(players, gameRows, grandTotal) {
   // ポイント順にソート
@@ -1683,7 +1847,9 @@ document.addEventListener('input', function(e) {
         if (manualInput) manualInput.value = e.target.value;
         // スコアテーブルの名前も更新
         const name = e.target.value || 'P' + (parseInt(idx) + 1);
-        ['score-table-out', 'score-table-in'].forEach(tableId => {
+        const syncTableIds = ['score-table-out', 'score-table-in'];
+        if (roundCount === 2) syncTableIds.push('score-table-out-r2', 'score-table-in-r2');
+        syncTableIds.forEach(tableId => {
           const table = document.getElementById(tableId);
           if (!table) return;
           const rows = table.querySelectorAll('tbody tr');
@@ -1718,7 +1884,9 @@ document.addEventListener('input', function(e) {
     const homeInput = document.querySelector('[data-home-player="' + idx + '"]');
     if (homeInput) homeInput.value = e.target.value;
     // スコアテーブルの名前を更新
-    ['score-table-out', 'score-table-in'].forEach(tableId => {
+    const syncIds = ['score-table-out', 'score-table-in'];
+    if (roundCount === 2) syncIds.push('score-table-out-r2', 'score-table-in-r2');
+    syncIds.forEach(tableId => {
       const table = document.getElementById(tableId);
       if (!table) return;
       const rows = table.querySelectorAll('tbody tr');
@@ -1736,6 +1904,10 @@ document.addEventListener('change', function(e) {
     localStorage.removeItem('hodogaya_scores');
     renderScoreTable('score-table-out', PAR_OUT, 1);
     renderScoreTable('score-table-in', PAR_IN, 10);
+    if (roundCount === 2) {
+      renderScoreTable('score-table-out-r2', PAR_OUT, 1);
+      renderScoreTable('score-table-in-r2', PAR_IN, 10);
+    }
     makeScoreInputsReadonly();
     colorizeAllScoreInputs();
     saveScores();
@@ -2220,24 +2392,7 @@ function fillOcrScores(tableId, scores) {
 }
 
 // =================== スコア計算 ===================
-function calculateAndShow() {
-  // テーブル合計を計算
-  calculateTableTotals('score-table-out');
-  calculateTableTotals('score-table-in');
-
-  // データ収集
-  const players = collectPlayerData();
-
-  // スコア未入力チェック
-  const incomplete = players.some(p =>
-    p.scoresOut.some(s => s === 0) || p.scoresIn.some(s => s === 0)
-  );
-  if (incomplete) {
-    showToast('全ホールのスコアを入力してください');
-    return;
-  }
-
-  // 有効なゲームの計算
+function calculateRoundGames(players) {
   let teamResult = null;
   if (playerCount === 4 && selectedGames['4_team']) {
     teamResult = calculateTeamGame(players);
@@ -2265,13 +2420,61 @@ function calculateAndShow() {
     bestResult = calculateBestGame(players);
   }
 
+  return { teamResult, nakanukiResult, individualVResult, individualResult, bestResult };
+}
+
+function calculateAndShow() {
+  // テーブル合計を計算
+  calculateTableTotals('score-table-out');
+  calculateTableTotals('score-table-in');
+  if (roundCount === 2) {
+    calculateTableTotals('score-table-out-r2');
+    calculateTableTotals('score-table-in-r2');
+  }
+
+  // データ収集
+  const playersR1 = collectPlayerData('score-table-out', 'score-table-in');
+
+  // スコア未入力チェック
+  const incompleteR1 = playersR1.some(p =>
+    p.scoresOut.some(s => s === 0) || p.scoresIn.some(s => s === 0)
+  );
+
+  let playersR2 = null;
+  if (roundCount === 2) {
+    playersR2 = collectPlayerData('score-table-out-r2', 'score-table-in-r2');
+    const incompleteR2 = playersR2.some(p =>
+      p.scoresOut.some(s => s === 0) || p.scoresIn.some(s => s === 0)
+    );
+    if (incompleteR1 || incompleteR2) {
+      showToast('全ホールのスコアを入力してください');
+      return;
+    }
+  } else {
+    if (incompleteR1) {
+      showToast('全ホールのスコアを入力してください');
+      return;
+    }
+  }
+
+  // ゲーム計算
+  const r1 = calculateRoundGames(playersR1);
+  let r2 = null;
+  if (roundCount === 2 && playersR2) {
+    r2 = calculateRoundGames(playersR2);
+  }
+
   // ローディング表示後、結果描画＆遷移
   const modal = document.getElementById('loading-modal');
   modal.style.display = 'flex';
 
   setTimeout(() => {
-    renderResultPage(players, teamResult, individualResult, bestResult, nakanukiResult, individualVResult);
-    saveRecentRecord(players);
+    if (roundCount === 2 && r2) {
+      renderResultPage2R(playersR1, r1, playersR2, r2);
+    } else {
+      renderResultPage(playersR1, r1.teamResult, r1.individualResult, r1.bestResult, r1.nakanukiResult, r1.individualVResult);
+    }
+    saveRecentRecord(playersR1);
     renderRecentRecords();
     modal.style.display = 'none';
     navigateTo('page-result');
@@ -2324,7 +2527,9 @@ function getAllScoreInputs() {
   // ホール単位でプレーヤーを巡回する順序に並べ替え
   // H1: P1→P2→P3→P4, H2: P1→P2→P3→P4, ... H9, then H10: P1→P2...
   const result = [];
-  ['score-table-out', 'score-table-in'].forEach(tableId => {
+  const tableIds = ['score-table-out', 'score-table-in'];
+  if (roundCount === 2) tableIds.push('score-table-out-r2', 'score-table-in-r2');
+  tableIds.forEach(tableId => {
     const table = document.getElementById(tableId);
     if (!table) return;
     const rows = Array.from(table.querySelectorAll('tbody tr'));
@@ -2342,7 +2547,8 @@ function getAllScoreInputs() {
 
 function getScoreInputInfo(input) {
   const table = input.closest('table');
-  const isOut = table?.id === 'score-table-out';
+  const isOut = table?.id === 'score-table-out' || table?.id === 'score-table-out-r2';
+  const isR2 = table?.id === 'score-table-out-r2' || table?.id === 'score-table-in-r2';
   const row = input.closest('tr');
   const rows = Array.from(table.querySelectorAll('tbody tr'));
   const playerIdx = rows.indexOf(row);
@@ -2353,7 +2559,7 @@ function getScoreInputInfo(input) {
   const par = pars[holeIdx] || 4;
   const names = getPlayerNames();
   const playerName = names[playerIdx] || ('P' + (playerIdx + 1));
-  return { holeNum, par, playerName, playerIdx, holeIdx, isOut };
+  return { holeNum, par, playerName, playerIdx, holeIdx, isOut, isR2 };
 }
 
 function colorizeScoreInput(input) {
@@ -2383,7 +2589,8 @@ function openNumpad(input) {
   const info = getScoreInputInfo(input);
 
   // ヘッダー更新
-  document.getElementById('numpad-info').textContent = `H${info.holeNum} - ${info.playerName}`;
+  const r2Prefix = info.isR2 ? '2R ' : '';
+  document.getElementById('numpad-info').textContent = `${r2Prefix}H${info.holeNum} - ${info.playerName}`;
   document.getElementById('numpad-par').textContent = `PAR ${info.par}`;
 
   // PAR/バーディのボタン色分け
@@ -2716,6 +2923,23 @@ function saveScores() {
       data[key][pIdx] = scores;
     });
   });
+  if (roundCount === 2) {
+    data.out_r2 = [];
+    data.in_r2 = [];
+    ['score-table-out-r2', 'score-table-in-r2'].forEach(tableId => {
+      const key = tableId === 'score-table-out-r2' ? 'out_r2' : 'in_r2';
+      const table = document.getElementById(tableId);
+      if (!table) return;
+      const rows = table.querySelectorAll('tbody tr');
+      rows.forEach((row, pIdx) => {
+        const scores = [];
+        row.querySelectorAll('.score-input').forEach(inp => {
+          scores.push(inp.value || '');
+        });
+        data[key][pIdx] = scores;
+      });
+    });
+  }
   try {
     localStorage.setItem('hodogaya_scores', JSON.stringify(data));
   } catch(e) { console.warn('Score save failed', e); }
@@ -2750,10 +2974,18 @@ function prefillScores() {
 
   fillTable('score-table-out', saved.out);
   fillTable('score-table-in', saved.in);
+  if (roundCount === 2 && saved.out_r2) {
+    fillTable('score-table-out-r2', saved.out_r2);
+    fillTable('score-table-in-r2', saved.in_r2);
+  }
 
   // 合計を計算
   calculateTableTotals('score-table-out');
   calculateTableTotals('score-table-in');
+  if (roundCount === 2) {
+    calculateTableTotals('score-table-out-r2');
+    calculateTableTotals('score-table-in-r2');
+  }
 
   // スコア色分け
   colorizeAllScoreInputs();
@@ -3771,6 +4003,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const savedCount = getSavedPlayerCount();
     setPlayerCount(savedCount || 4);
     console.log('[INIT] setPlayerCount done');
+
+    // ラウンド数を復元
+    const savedRoundCount = localStorage.getItem('hodogaya_round_count');
+    if (savedRoundCount) setRoundCount(parseInt(savedRoundCount));
     
     // ゲーム種別が表示されているか確認
     const gtContainer = document.getElementById('game-type-options');
@@ -3780,7 +4016,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // スタートコースを復元（保存済みがあればそれを使う）
     const savedStartCourse = localStorage.getItem('hodogaya_start_course') || 'IN';
     setStartCourse(savedStartCourse);
-    document.querySelectorAll('.start-course-btn').forEach(btn => {
+    document.querySelectorAll('#start-course-selector .start-course-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.course === savedStartCourse);
     });
 

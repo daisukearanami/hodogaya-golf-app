@@ -24,7 +24,7 @@
   <!-- Tesseract.js OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
-  <link rel="stylesheet" href="style.css?v=20260511f">
+  <link rel="stylesheet" href="style.css?v=20260511g">
   <script>
     window.onerror = function(msg, url, line, col, err) {
       document.title = 'ERR: ' + msg;
@@ -156,6 +156,26 @@
         </div>
         <div class="tee-total-display" id="tee-total-display">
           <!-- JSで動的更新 -->
+        </div>
+      </div>
+
+      <!-- ラウンド数選択 -->
+      <div class="section-card round-count-section">
+        <h2 class="section-title">
+          ラウンド数
+          <span class="section-title-en">Number of Rounds</span>
+        </h2>
+        <div class="round-count-selector" id="round-count-selector">
+          <button class="start-course-btn active" data-rounds="1" onclick="setRoundCount(1)">
+            <i class="fas fa-golf-ball"></i>
+            <span>1R</span>
+            <small>18ホール</small>
+          </button>
+          <button class="start-course-btn" data-rounds="2" onclick="setRoundCount(2)">
+            <i class="fas fa-golf-ball"></i>
+            <span>2R</span>
+            <small>36ホール</small>
+          </button>
         </div>
       </div>
 
@@ -504,6 +524,31 @@
                   <td class="td-total">-</td>
                 </tr>
               </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 2R用スコア入力テーブル（2R選択時のみ表示） -->
+        <div class="input-section round2-section" id="round2-out-section" style="display:none;">
+          <h3 class="input-section-title">
+            <i class="fas fa-golf-ball"></i> 2R OUT (Hole 1-9)
+          </h3>
+          <div class="score-table-wrapper" id="score-table-out-r2-wrapper">
+            <table class="score-table" id="score-table-out-r2">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="input-section round2-section" id="round2-in-section" style="display:none;">
+          <h3 class="input-section-title">
+            <i class="fas fa-golf-ball"></i> 2R IN (Hole 10-18)
+          </h3>
+          <div class="score-table-wrapper" id="score-table-in-r2-wrapper">
+            <table class="score-table" id="score-table-in-r2">
+              <thead></thead>
+              <tbody></tbody>
             </table>
           </div>
         </div>
@@ -946,7 +991,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260511f"></script>
+  <script src="app.js?v=20260511g"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {
