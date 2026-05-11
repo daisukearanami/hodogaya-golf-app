@@ -24,7 +24,7 @@
   <!-- Tesseract.js OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
-  <link rel="stylesheet" href="style.css?v=20260228d">
+  <link rel="stylesheet" href="style.css?v=20260511a">
   <script>
     window.onerror = function(msg, url, line, col, err) {
       document.title = 'ERR: ' + msg;
@@ -173,6 +173,26 @@
         </div>
       </div>
 
+      <!-- 団体戦後半レート -->
+      <div class="section-card team-rate-section" id="team-rate-section">
+        <h2 class="section-title">
+          団体戦後半レート
+          <span class="section-title-en">Team Back Half Rate</span>
+        </h2>
+        <div class="team-rate-selector" id="team-rate-selector">
+          <button class="team-rate-btn active" data-rate="15" onclick="setTeamBackRate(15)">
+            <i class="fas fa-coins"></i>
+            <span>ツル半</span>
+            <small>15ポイント</small>
+          </button>
+          <button class="team-rate-btn" data-rate="20" onclick="setTeamBackRate(20)">
+            <i class="fas fa-coins"></i>
+            <span>2ツル</span>
+            <small>20ポイント</small>
+          </button>
+        </div>
+      </div>
+
       <div class="home-actions">
         <button class="btn-primary" onclick="navigateTo('page-capture')">
           <i class="fas fa-camera"></i>
@@ -190,40 +210,8 @@
           最近の記録
           <span class="section-title-en">Recent Records</span>
         </h2>
-        <div class="recent-list">
-          <div class="recent-item" onclick="navigateTo('page-result')">
-            <div class="recent-date">
-              <span class="date-month">2月</span>
-              <span class="date-day">15</span>
-            </div>
-            <div class="recent-info">
-              <div class="recent-players">山田、鈴木、田中、佐藤</div>
-              <div class="recent-course">OUT → IN</div>
-            </div>
-            <div class="recent-arrow"><i class="fas fa-chevron-right"></i></div>
-          </div>
-          <div class="recent-item">
-            <div class="recent-date">
-              <span class="date-month">2月</span>
-              <span class="date-day">8</span>
-            </div>
-            <div class="recent-info">
-              <div class="recent-players">山田、中村、高橋、伊藤</div>
-              <div class="recent-course">IN → OUT</div>
-            </div>
-            <div class="recent-arrow"><i class="fas fa-chevron-right"></i></div>
-          </div>
-          <div class="recent-item">
-            <div class="recent-date">
-              <span class="date-month">1月</span>
-              <span class="date-day">25</span>
-            </div>
-            <div class="recent-info">
-              <div class="recent-players">山田、小林、渡辺、加藤</div>
-              <div class="recent-course">OUT → IN</div>
-            </div>
-            <div class="recent-arrow"><i class="fas fa-chevron-right"></i></div>
-          </div>
+        <div class="recent-list" id="recent-records-list">
+          <!-- JSで動的生成 -->
         </div>
       </div>
 
@@ -961,7 +949,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260222n"></script>
+  <script src="app.js?v=20260511a"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {

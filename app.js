@@ -8,6 +8,7 @@ let playerCount = 4;
 let startCourse = 'IN'; // 'OUT' or 'IN'
 let selectedGreen = 'A'; // 'A' or 'B'
 let selectedTee = 'regular'; // 'back', 'regular', 'front', 'gold'
+let teamBackRate = 15; // 15 (ツル半) or 20 (2ツル)
 
 // =================== ヤーデージデータ（程ヶ谷CC公式） ===================
 const YARD_DATA = {
@@ -126,6 +127,20 @@ function setTee(tee) {
   updateTeeTotalDisplay();
 }
 
+function setTeamBackRate(rate) {
+  teamBackRate = rate;
+  localStorage.setItem('hodogaya_team_back_rate', String(rate));
+  document.querySelectorAll('.team-rate-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.rate) === rate);
+  });
+}
+
+function updateTeamRateVisibility() {
+  const section = document.getElementById('team-rate-section');
+  if (!section) return;
+  section.style.display = (playerCount === 4) ? '' : 'none';
+}
+
 function updateTeeTotalDisplay() {
   const el = document.getElementById('tee-total-display');
   if (!el) return;
@@ -195,6 +210,7 @@ function renderGameTypes() {
   });
   container.innerHTML = html;
   console.log('[renderGameTypes] innerHTML set, length:', container.innerHTML.length);
+  updateTeamRateVisibility();
 }
 
 function toggleGameType(key) {
@@ -983,29 +999,8 @@ function renderResultPage(players, teamResult, individualResult, bestResult, nak
   // --- ゲーム結果 ---
   const container = document.getElementById('game-results-container');
   if (!container) return;
-  let html = '';
 
-  if (teamResult) {
-    html += renderTeamGameResult(teamResult, players);
-  }
-
-  if (nakanukiResult) {
-    html += renderNakanukiGameResult(nakanukiResult, players);
-  }
-
-  if (individualVResult) {
-    html += renderIndividualVGameResult(individualVResult, players);
-  }
-
-  if (individualResult) {
-    html += renderIndividualGameResult(individualResult, players);
-  }
-
-  if (bestResult) {
-    html += renderBestGameResult(bestResult, players);
-  }
-
-  // --- 全ゲーム合計ポイント集計 ---
+  // --- 全ゲーム合計ポイント集計（先に計算） ---
   const gameRows = []; // { label, pts: { playerIdx: number } }
   const grandTotal = {};
   players.forEach(p => { grandTotal[p.index] = 0; });
@@ -1016,8 +1011,8 @@ function renderResultPage(players, teamResult, individualResult, bestResult, nak
     const backResults = isOutStart ? tr.results.slice(9) : tr.results.slice(0, 9);
     const backPoints = backResults.reduce((s, r) => s + r.points, 0);
     const backWinner = backPoints > 0 ? 'L' : (backPoints < 0 ? 'R' : null);
-    const lPt = backWinner === 'L' ? 15 : (backWinner === 'R' ? -15 : 0);
-    const rPt = backWinner === 'R' ? 15 : (backWinner === 'L' ? -15 : 0);
+    const lPt = backWinner === 'L' ? teamBackRate : (backWinner === 'R' ? -teamBackRate : 0);
+    const rPt = backWinner === 'R' ? teamBackRate : (backWinner === 'L' ? -teamBackRate : 0);
     const pts = {};
     tr.teams.teamL.forEach(p => { pts[p.index] = lPt; });
     tr.teams.teamR.forEach(p => { pts[p.index] = rPt; });
@@ -1053,8 +1048,31 @@ function renderResultPage(players, teamResult, individualResult, bestResult, nak
     players.forEach(p => { grandTotal[p.index] += row.pts[p.index] || 0; });
   });
 
+  // 合計ポイント → ゲーム詳細 の順で表示
+  let html = '';
+
   if (gameRows.length > 0) {
     html += renderGrandTotal(players, gameRows, grandTotal);
+  }
+
+  if (teamResult) {
+    html += renderTeamGameResult(teamResult, players);
+  }
+
+  if (nakanukiResult) {
+    html += renderNakanukiGameResult(nakanukiResult, players);
+  }
+
+  if (individualVResult) {
+    html += renderIndividualVGameResult(individualVResult, players);
+  }
+
+  if (individualResult) {
+    html += renderIndividualGameResult(individualResult, players);
+  }
+
+  if (bestResult) {
+    html += renderBestGameResult(bestResult, players);
   }
 
   if (!html) {
@@ -1160,7 +1178,7 @@ function renderTeamGameResult(tr, players) {
       <div class="thr-reward"><i class="fas fa-utensils"></i> ${frontWinner ? frontWinner + ' がランチ獲得' : '引き分け'}</div>
     </div>`;
 
-  // 後半（15ポイント）
+  // 後半（団体戦後半レート）
   html += buildTeamTable(backLabel, backResults, backStart, backPoints);
   const backWinner = backPoints > 0 ? 'L組' : (backPoints < 0 ? 'R組' : null);
   const backWinClass = backPoints > 0 ? 'team-l-wins' : (backPoints < 0 ? 'team-r-wins' : 'team-draw');
@@ -1168,7 +1186,7 @@ function renderTeamGameResult(tr, players) {
     <div class="team-half-result ${backWinClass}">
       <div class="thr-half">後半（${backLabel}）</div>
       <div class="thr-points">${backPoints > 0 ? '+' : ''}${backPoints} pt</div>
-      <div class="thr-reward"><i class="fas fa-coins"></i> ${backWinner ? backWinner + ' +15pt / ' + (backWinner === 'L組' ? 'R組' : 'L組') + ' -15pt' : '引き分け'}</div>
+      <div class="thr-reward"><i class="fas fa-coins"></i> ${backWinner ? backWinner + ' +' + teamBackRate + 'pt / ' + (backWinner === 'L組' ? 'R組' : 'L組') + ' -' + teamBackRate + 'pt' : '引き分け'}</div>
     </div>`;
 
   // ポイント集計テーブル
@@ -1178,8 +1196,8 @@ function renderTeamGameResult(tr, players) {
   html += `</tr></thead><tbody>`;
 
   // 後半のポイントを各メンバーに配分
-  const lPt = backWinner === 'L組' ? 15 : (backWinner === 'R組' ? -15 : 0);
-  const rPt = backWinner === 'R組' ? 15 : (backWinner === 'L組' ? -15 : 0);
+  const lPt = backWinner === 'L組' ? teamBackRate : (backWinner === 'R組' ? -teamBackRate : 0);
+  const rPt = backWinner === 'R組' ? teamBackRate : (backWinner === 'L組' ? -teamBackRate : 0);
   const allMembers = teams.teamL.concat(teams.teamR);
   const memberPts = allMembers.map((p, i) => i < 2 ? lPt : rPt);
 
@@ -1636,11 +1654,14 @@ function renderScoreTable(tableId, pars, startHole) {
   const names = getPlayerNames();
   let bodyHTML = '';
   for (let i = 0; i < playerCount; i++) {
+    let bogeyTotal = 0;
     bodyHTML += `<tr><td class="td-player">${names[i]}</td>`;
     for (let h = 0; h < 9; h++) {
-      bodyHTML += `<td><input type="number" class="score-input" min="1" max="20" readonly style="cursor:pointer;"></td>`;
+      const bogey = pars[h] + 1;
+      bogeyTotal += bogey;
+      bodyHTML += `<td><input type="number" class="score-input" min="1" max="20" value="${bogey}" readonly style="cursor:pointer;"></td>`;
     }
-    bodyHTML += '<td class="td-total">-</td></tr>';
+    bodyHTML += `<td class="td-total">${bogeyTotal}</td></tr>`;
   }
   table.querySelector('tbody').innerHTML = bodyHTML;
 }
@@ -1706,6 +1727,18 @@ document.addEventListener('input', function(e) {
         if (td) td.textContent = name;
       }
     });
+  }
+});
+
+// プレーヤー名が変わったらスコアをボギーにリセット
+document.addEventListener('change', function(e) {
+  if (e.target.classList.contains('home-player-name')) {
+    localStorage.removeItem('hodogaya_scores');
+    renderScoreTable('score-table-out', PAR_OUT, 1);
+    renderScoreTable('score-table-in', PAR_IN, 10);
+    makeScoreInputsReadonly();
+    colorizeAllScoreInputs();
+    saveScores();
   }
 });
 
@@ -2238,6 +2271,8 @@ function calculateAndShow() {
 
   setTimeout(() => {
     renderResultPage(players, teamResult, individualResult, bestResult, nakanukiResult, individualVResult);
+    saveRecentRecord(players);
+    renderRecentRecords();
     modal.style.display = 'none';
     navigateTo('page-result');
   }, 800);
@@ -3668,6 +3703,62 @@ function applyVoiceInput() {
   cancelVoiceInput();
 }
 
+// =================== 最近の記録 ===================
+function saveRecentRecord(players) {
+  const today = new Date();
+  const record = {
+    date: today.toISOString(),
+    players: players.map(p => p.name),
+    course: startCourse === 'OUT' ? 'OUT → IN' : 'IN → OUT',
+    playerCount: playerCount,
+    timestamp: Date.now()
+  };
+  let records = [];
+  try {
+    const saved = localStorage.getItem('hodogaya_recent_records');
+    if (saved) records = JSON.parse(saved);
+  } catch(e) {}
+  records.unshift(record);
+  if (records.length > 10) records = records.slice(0, 10);
+  try {
+    localStorage.setItem('hodogaya_recent_records', JSON.stringify(records));
+  } catch(e) {}
+}
+
+function renderRecentRecords() {
+  const container = document.getElementById('recent-records-list');
+  if (!container) return;
+  let records = [];
+  try {
+    const saved = localStorage.getItem('hodogaya_recent_records');
+    if (saved) records = JSON.parse(saved);
+  } catch(e) {}
+  if (records.length === 0) {
+    container.innerHTML = '<div class="recent-empty" style="text-align:center; padding:20px; color:#999;"><i class="fas fa-golf-ball" style="font-size:24px; display:block; margin-bottom:8px;"></i>まだ記録がありません</div>';
+    return;
+  }
+  let html = '';
+  records.forEach(rec => {
+    const d = new Date(rec.date);
+    const month = (d.getMonth() + 1) + '月';
+    const day = d.getDate();
+    const playerNames = rec.players.join('、');
+    html += `
+      <div class="recent-item">
+        <div class="recent-date">
+          <span class="date-month">${month}</span>
+          <span class="date-day">${day}</span>
+        </div>
+        <div class="recent-info">
+          <div class="recent-players">${playerNames}</div>
+          <div class="recent-course">${rec.course}</div>
+        </div>
+        <div class="recent-arrow"><i class="fas fa-chevron-right"></i></div>
+      </div>`;
+  });
+  container.innerHTML = html;
+}
+
 // =================== 初期化 ===================
 document.addEventListener('DOMContentLoaded', function() {
   try {
@@ -3696,8 +3787,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // グリーン/ティー初期表示更新
     updateTeeTotalDisplay();
 
+    // 団体戦後半レートを復元
+    const savedRate = localStorage.getItem('hodogaya_team_back_rate');
+    if (savedRate) setTeamBackRate(parseInt(savedRate));
+    updateTeamRateVisibility();
+
+    // 最近の記録を表示
+    renderRecentRecords();
+
     // スコアカード読み取りデータを自動入力
     prefillScores();
+
+    // スコア色分け
+    colorizeAllScoreInputs();
 
     // score-inputをreadonlyに
     makeScoreInputsReadonly();
