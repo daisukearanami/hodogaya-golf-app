@@ -217,19 +217,41 @@ input, select, button, textarea {
   z-index: 1;
 }
 
-.crane-svg {
-  width: 110px;
-  height: auto;
+.crane-img-wrapper {
+  width: 115px;
+  height: 155px;
+  overflow: hidden;
   flex-shrink: 0;
-  opacity: 0.9;
+  position: relative;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 35%, transparent 72%);
+  mask-image: radial-gradient(ellipse at center, black 35%, transparent 72%);
 }
 
-.crane-svg.crane-left {
-  margin-right: -10px;
+.crane-img-wrapper.crane-left {
+  margin-right: -6px;
 }
 
-.crane-svg.crane-right {
-  margin-left: -10px;
+.crane-img-wrapper.crane-right {
+  margin-left: -6px;
+}
+
+.crane-photo {
+  width: 340%;
+  height: auto;
+  position: absolute;
+  filter: grayscale(0.5) sepia(0.6) brightness(1.9) contrast(1.15);
+  mix-blend-mode: screen;
+  opacity: 0.88;
+}
+
+.crane-left .crane-photo {
+  top: -68%;
+  left: -48%;
+}
+
+.crane-right .crane-photo {
+  top: -68%;
+  left: -180%;
 }
 
 .hero-title {
