@@ -24,7 +24,7 @@
   <!-- Tesseract.js OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
-  <link rel="stylesheet" href="style.css?v=20260511a">
+  <link rel="stylesheet" href="style.css?v=20260511b">
   <script>
     window.onerror = function(msg, url, line, col, err) {
       document.title = 'ERR: ' + msg;
@@ -57,14 +57,73 @@
       <div class="hero-section">
         <div class="hero-overlay"></div>
         <div class="hero-content">
-          <h1 class="hero-title">
-            Game Tsuru Han
-            <span class="hero-subtitle">Game Tsuru Han</span>
-          </h1>
-          <p class="hero-description">
-            スコアカードを撮影するだけで<br>
-            ゲームの結果を自動計算
-          </p>
+          <div class="hero-cranes">
+            <svg class="crane-svg crane-left" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg">
+              <!-- Left crane (facing right) - inspired by 1000 yen bill -->
+              <g fill="none" stroke="rgba(193,164,88,0.85)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <!-- Body -->
+                <ellipse cx="100" cy="155" rx="55" ry="30" fill="rgba(255,255,255,0.12)" stroke="rgba(193,164,88,0.7)"/>
+                <!-- Neck -->
+                <path d="M140,140 Q160,110 155,70 Q153,50 148,40" stroke-width="2"/>
+                <!-- Head -->
+                <circle cx="148" cy="37" r="6" fill="rgba(255,255,255,0.15)" stroke="rgba(193,164,88,0.8)"/>
+                <!-- Red crown -->
+                <circle cx="148" cy="32" r="3.5" fill="rgba(180,40,40,0.7)" stroke="none"/>
+                <!-- Beak -->
+                <line x1="154" y1="37" x2="172" y2="34" stroke-width="2" stroke="rgba(193,164,88,0.9)"/>
+                <!-- Eye -->
+                <circle cx="150" cy="36" r="1" fill="rgba(193,164,88,0.9)"/>
+                <!-- Wing (raised, display) -->
+                <path d="M70,145 Q60,110 75,80 Q90,55 115,50" stroke-width="1.8" fill="rgba(255,255,255,0.06)"/>
+                <path d="M75,80 Q85,65 100,58" stroke-width="1.2"/>
+                <path d="M80,90 Q90,75 105,65" stroke-width="1.2"/>
+                <path d="M85,100 Q95,85 110,75" stroke-width="1.2"/>
+                <!-- Tail feathers -->
+                <path d="M45,150 Q25,140 15,125" stroke-width="1.8" fill="rgba(0,0,0,0.15)"/>
+                <path d="M50,155 Q30,150 18,138" stroke-width="1.5"/>
+                <path d="M48,160 Q32,158 22,148" stroke-width="1.2"/>
+                <!-- Legs -->
+                <line x1="90" y1="185" x2="85" y2="240" stroke-width="1.8" stroke="rgba(193,164,88,0.6)"/>
+                <line x1="115" y1="185" x2="118" y2="240" stroke-width="1.8" stroke="rgba(193,164,88,0.6)"/>
+                <!-- Feet -->
+                <path d="M85,240 L78,248 M85,240 L88,249 M85,240 L82,250" stroke-width="1.2" stroke="rgba(193,164,88,0.5)"/>
+                <path d="M118,240 L112,248 M118,240 L121,249 M118,240 L116,250" stroke-width="1.2" stroke="rgba(193,164,88,0.5)"/>
+              </g>
+            </svg>
+            <h1 class="hero-title">Crane Game</h1>
+            <svg class="crane-svg crane-right" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg">
+              <!-- Right crane (facing left, mirrored) -->
+              <g fill="none" stroke="rgba(193,164,88,0.85)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" transform="scale(-1,1) translate(-200,0)">
+                <!-- Body -->
+                <ellipse cx="100" cy="155" rx="55" ry="30" fill="rgba(255,255,255,0.12)" stroke="rgba(193,164,88,0.7)"/>
+                <!-- Neck -->
+                <path d="M140,140 Q160,110 155,70 Q153,50 148,40" stroke-width="2"/>
+                <!-- Head -->
+                <circle cx="148" cy="37" r="6" fill="rgba(255,255,255,0.15)" stroke="rgba(193,164,88,0.8)"/>
+                <!-- Red crown -->
+                <circle cx="148" cy="32" r="3.5" fill="rgba(180,40,40,0.7)" stroke="none"/>
+                <!-- Beak -->
+                <line x1="154" y1="37" x2="172" y2="34" stroke-width="2" stroke="rgba(193,164,88,0.9)"/>
+                <!-- Eye -->
+                <circle cx="150" cy="36" r="1" fill="rgba(193,164,88,0.9)"/>
+                <!-- Wing (raised, display) -->
+                <path d="M70,145 Q60,110 75,80 Q90,55 115,50" stroke-width="1.8" fill="rgba(255,255,255,0.06)"/>
+                <path d="M75,80 Q85,65 100,58" stroke-width="1.2"/>
+                <path d="M80,90 Q90,75 105,65" stroke-width="1.2"/>
+                <path d="M85,100 Q95,85 110,75" stroke-width="1.2"/>
+                <!-- Tail feathers -->
+                <path d="M45,150 Q25,140 15,125" stroke-width="1.8" fill="rgba(0,0,0,0.15)"/>
+                <path d="M50,155 Q30,150 18,138" stroke-width="1.5"/>
+                <path d="M48,160 Q32,158 22,148" stroke-width="1.2"/>
+                <!-- Legs -->
+                <line x1="90" y1="185" x2="85" y2="240" stroke-width="1.8" stroke="rgba(193,164,88,0.6)"/>
+                <line x1="115" y1="185" x2="118" y2="240" stroke-width="1.8" stroke="rgba(193,164,88,0.6)"/>
+                <!-- Feet -->
+                <path d="M85,240 L78,248 M85,240 L88,249 M85,240 L82,250" stroke-width="1.2" stroke="rgba(193,164,88,0.5)"/>
+                <path d="M118,240 L112,248 M118,240 L121,249 M118,240 L116,250" stroke-width="1.2" stroke="rgba(193,164,88,0.5)"/>
+              </g>
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -949,7 +1008,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260511a"></script>
+  <script src="app.js?v=20260511b"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {

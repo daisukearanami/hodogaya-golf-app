@@ -181,7 +181,7 @@ input, select, button, textarea {
   position: relative;
   background: 
     linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 50%, var(--maroon) 100%);
-  padding: 48px 24px 40px;
+  padding: 36px 16px 28px;
   text-align: center;
   overflow: hidden;
 }
@@ -208,25 +208,40 @@ input, select, button, textarea {
   border-radius: 50%;
 }
 
-.hero-title {
-  font-family: var(--font-serif);
-  color: var(--white);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  margin-bottom: 12px;
+.hero-cranes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
   position: relative;
   z-index: 1;
 }
 
-.hero-subtitle {
-  display: block;
+.crane-svg {
+  width: 110px;
+  height: auto;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.crane-svg.crane-left {
+  margin-right: -10px;
+}
+
+.crane-svg.crane-right {
+  margin-left: -10px;
+}
+
+.hero-title {
   font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 400;
   color: var(--gold);
-  letter-spacing: 2px;
-  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 .hero-description {
