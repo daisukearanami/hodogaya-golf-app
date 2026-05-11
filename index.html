@@ -24,7 +24,7 @@
   <!-- Tesseract.js OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
-  <link rel="stylesheet" href="style.css?v=20260511c">
+  <link rel="stylesheet" href="style.css?v=20260511d">
   <script>
     window.onerror = function(msg, url, line, col, err) {
       document.title = 'ERR: ' + msg;
@@ -56,16 +56,11 @@
     <section id="page-home" class="page active">
       <div class="hero-section">
         <div class="hero-overlay"></div>
+        <div class="hero-bill-bg">
+          <img src="crane-1000yen.jpg" alt="" class="hero-bill-img">
+        </div>
         <div class="hero-content">
-          <div class="hero-cranes">
-            <div class="crane-img-wrapper crane-left">
-              <img src="crane-1000yen.jpg" alt="" class="crane-photo">
-            </div>
-            <h1 class="hero-title">Crane Game</h1>
-            <div class="crane-img-wrapper crane-right">
-              <img src="crane-1000yen.jpg" alt="" class="crane-photo">
-            </div>
-          </div>
+          <h1 class="hero-title">Crane Game</h1>
         </div>
       </div>
 
@@ -950,7 +945,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260511c"></script>
+  <script src="app.js?v=20260511d"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {
