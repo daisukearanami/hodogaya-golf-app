@@ -143,7 +143,8 @@ function setTeamBackRate(rate) {
 function updateTeamRateVisibility() {
   const section = document.getElementById('team-rate-section');
   if (!section) return;
-  section.style.display = (playerCount === 4) ? '' : 'none';
+  // 全プレーヤー人数で後半レート選択を表示
+  section.style.display = '';
 }
 
 // =================== ラウンド数設定 ===================
@@ -2095,6 +2096,7 @@ async function analyzeScorecard() {
       calculateTableTotals('score-table-out');
       calculateTableTotals('score-table-in');
       colorizeAllScoreInputs();
+      checkMidwayAvailable();
     }
     makeScoreInputsReadonly();
 
@@ -2423,6 +2425,347 @@ function calculateRoundGames(players) {
   return { teamResult, nakanukiResult, individualVResult, individualResult, bestResult };
 }
 
+// =================== 途中経過（前半終了時）===================
+function isFrontNineComplete() {
+  const isOutStart = startCourse === 'OUT';
+  const frontTableId = isOutStart ? 'score-table-out' : 'score-table-in';
+  const table = document.getElementById(frontTableId);
+  if (!table) return false;
+  const rows = table.querySelectorAll('tbody tr');
+  if (rows.length < playerCount) return false;
+  for (let i = 0; i < playerCount; i++) {
+    const inputs = rows[i].querySelectorAll('.score-input');
+    for (let h = 0; h < 9; h++) {
+      const val = parseInt(inputs[h]?.value);
+      if (isNaN(val) || val === 0) return false;
+    }
+  }
+  return true;
+}
+
+function isBackNineComplete() {
+  const isOutStart = startCourse === 'OUT';
+  const backTableId = isOutStart ? 'score-table-in' : 'score-table-out';
+  const table = document.getElementById(backTableId);
+  if (!table) return false;
+  const rows = table.querySelectorAll('tbody tr');
+  if (rows.length < playerCount) return false;
+  for (let i = 0; i < playerCount; i++) {
+    const inputs = rows[i].querySelectorAll('.score-input');
+    for (let h = 0; h < 9; h++) {
+      const val = parseInt(inputs[h]?.value);
+      if (isNaN(val) || val === 0) return false;
+    }
+  }
+  return true;
+}
+
+function checkMidwayAvailable() {
+  const btn = document.getElementById('btn-midway-result');
+  if (!btn) return;
+  // 前半が完了し、後半がまだ全て埋まっていない場合にボタンを表示
+  if (isFrontNineComplete() && !isBackNineComplete()) {
+    btn.style.display = 'flex';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function collectFrontNineData() {
+  const isOutStart = startCourse === 'OUT';
+  const frontTableId = isOutStart ? 'score-table-out' : 'score-table-in';
+  const players = [];
+  const nameInputs = document.querySelectorAll('.player-name-input');
+  const hdcpInputs = document.querySelectorAll('.input-hdcp');
+
+  for (let i = 0; i < playerCount; i++) {
+    const scoresOut = [];
+    const scoresIn = [];
+
+    const table = document.getElementById(frontTableId);
+    const row = table?.querySelectorAll('tbody tr')[i];
+    if (row) {
+      row.querySelectorAll('.score-input').forEach(inp => {
+        const v = parseInt(inp.value) || 0;
+        if (isOutStart) scoresOut.push(v);
+        else scoresIn.push(v);
+      });
+    }
+
+    // 後半は0で埋める
+    for (let h = 0; h < 9; h++) {
+      if (isOutStart) scoresIn.push(0);
+      else scoresOut.push(0);
+    }
+
+    const manualName = nameInputs[i]?.value;
+    const homeName = document.querySelector('[data-home-player="' + i + '"]')?.value;
+    const finalName = manualName || homeName || (defaultPlayers[i]?.name) || `P${i + 1}`;
+    const manualHdcp = hdcpInputs[i]?.value;
+    const homeHdcp = document.querySelector('[data-home-hdcp="' + i + '"]')?.value;
+    const finalHdcp = parseInt(manualHdcp || homeHdcp) || (defaultPlayers[i]?.hdcp) || 0;
+
+    const totalOut = scoresOut.reduce((a, b) => a + b, 0);
+    const totalIn = scoresIn.reduce((a, b) => a + b, 0);
+    players.push({
+      index: i,
+      name: finalName,
+      hdcp: finalHdcp,
+      scoresOut,
+      scoresIn,
+      totalOut,
+      totalIn,
+      total: totalOut + totalIn,
+      net: totalOut + totalIn - finalHdcp,
+    });
+  }
+  return players;
+}
+
+function showMidwayResult() {
+  const players = collectFrontNineData();
+  const isOutStart = startCourse === 'OUT';
+  const frontLabel = isOutStart ? 'OUT' : 'IN';
+
+  let html = `<div class="midway-result-content">`;
+  html += `<h3 class="midway-title"><i class="fas fa-flag-checkered"></i> 途中経過（前半 ${frontLabel} 終了時点）</h3>`;
+
+  // === 団体戦（4人のみ） ===
+  if (playerCount === 4 && selectedGames['4_team']) {
+    const teams = determineTeams(players);
+    if (teams) {
+      const holeStrokes = distributeTeamHdcp(teams.teamL_hdcp, teams.teamR_hdcp);
+      const frontHoles = isOutStart ? Array.from({length:9}, (_,i) => i) : Array.from({length:9}, (_,i) => i+9);
+      let frontPoints = 0;
+      frontHoles.forEach(h => {
+        const r = calcTeamHole(teams.teamL, teams.teamR, h, holeStrokes[h]);
+        frontPoints += r.points;
+      });
+      const winner = frontPoints > 0 ? 'L組' : (frontPoints < 0 ? 'R組' : null);
+      const winClass = frontPoints > 0 ? 'team-l-wins' : (frontPoints < 0 ? 'team-r-wins' : 'team-draw');
+      html += `<div class="midway-section">`;
+      html += `<h4 class="midway-section-title"><i class="fas fa-people-group"></i> 団体戦</h4>`;
+      html += `<div class="midway-team-header">`;
+      html += `<span>L組: ${teams.teamL.map(p=>p.name).join(' & ')}</span>`;
+      html += `<span class="midway-vs">VS</span>`;
+      html += `<span>R組: ${teams.teamR.map(p=>p.name).join(' & ')}</span>`;
+      html += `</div>`;
+      html += `<div class="team-half-result ${winClass}" style="margin-top:8px;">`;
+      html += `<div class="thr-points">${frontPoints > 0 ? '+' : ''}${frontPoints} pt</div>`;
+      html += `<div class="thr-reward"><i class="fas fa-utensils"></i> ${winner ? winner + ' がランチ獲得' : '引き分け'}</div>`;
+      html += `</div></div>`;
+    }
+  }
+
+  // === 中抜き（3人）- 前半結果 ===
+  if (playerCount === 3 && selectedGames['3_nakanuki']) {
+    const hdcps = isOutStart ? HDCP_OUT : HDCP_IN;
+    const frontScores = players.map(p => {
+      const scores = isOutStart ? p.scoresOut : p.scoresIn;
+      let gross = 0, net = 0;
+      for (let h = 0; h < 9; h++) {
+        const g = scores[h];
+        const strokes = getHoleStrokes(p.hdcp, hdcps[h]);
+        gross += g;
+        net += g - strokes;
+      }
+      return { player: p, gross, net };
+    });
+    const sorted = [...frontScores].sort((a, b) => a.net - b.net);
+    const bestNet = sorted[0].net;
+    const worstNet = sorted[sorted.length - 1].net;
+    const winners = frontScores.filter(s => s.net === bestNet);
+    const losers = frontScores.filter(s => s.net === worstNet);
+    const isDraw = bestNet === worstNet;
+    const winnerNames = winners.map(w => w.player.name).join('・');
+    const loserNames = losers.map(l => l.player.name).join('・');
+    const rewardText = isDraw ? '引き分け' : `${winnerNames} が ${loserNames} からランチ獲得`;
+    html += `<div class="midway-section">`;
+    html += `<h4 class="midway-section-title"><i class="fas fa-arrows-left-right"></i> 中抜き（前半）</h4>`;
+    html += `<div class="team-half-result ${isDraw ? 'team-draw' : 'team-l-wins'}" style="margin-top:8px;">`;
+    html += `<div class="thr-reward"><i class="fas fa-utensils"></i> ${rewardText}</div>`;
+    html += `</div></div>`;
+  }
+
+  // === 個人戦タテ（2人）- 前半結果 ===
+  if (playerCount === 2 && selectedGames['2_individual_v']) {
+    const hdcps = isOutStart ? HDCP_OUT : HDCP_IN;
+    const frontScores = players.map(p => {
+      const scores = isOutStart ? p.scoresOut : p.scoresIn;
+      let gross = 0, net = 0;
+      for (let h = 0; h < 9; h++) {
+        const g = scores[h];
+        const strokes = getHoleStrokes(p.hdcp, hdcps[h]);
+        gross += g;
+        net += g - strokes;
+      }
+      return { player: p, gross, net };
+    });
+    const a = frontScores[0], b = frontScores[1];
+    const isDraw = a.net === b.net;
+    const winner = a.net < b.net ? a : b;
+    const loser = a.net < b.net ? b : a;
+    const rewardText = isDraw ? '引き分け' : `${winner.player.name} が ${loser.player.name} からランチ獲得`;
+    html += `<div class="midway-section">`;
+    html += `<h4 class="midway-section-title"><i class="fas fa-arrows-up-down"></i> 個人戦（タテ）前半</h4>`;
+    html += `<div class="team-half-result ${isDraw ? 'team-draw' : 'team-l-wins'}" style="margin-top:8px;">`;
+    html += `<div class="thr-reward"><i class="fas fa-utensils"></i> ${rewardText}</div>`;
+    html += `</div></div>`;
+  }
+
+  // === 個人戦マッチプレー途中経過 ===
+  const indKey = playerCount === 2 ? '2_individual_h' : playerCount + '_individual';
+  if (selectedGames[indKey]) {
+    html += `<div class="midway-section">`;
+    html += `<h4 class="midway-section-title"><i class="fas fa-user"></i> 個人戦（マッチプレー途中経過）</h4>`;
+    html += `<table class="midway-table"><thead><tr><th>対戦</th><th>状況</th></tr></thead><tbody>`;
+
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        const pA = players[i], pB = players[j];
+        const hdcpDiff = Math.abs(pA.hdcp - pB.hdcp);
+        const weakerIs = pA.hdcp > pB.hdcp ? 'A' : (pB.hdcp > pA.hdcp ? 'B' : null);
+
+        let aWins = 0;
+        const frontHoleIndices = isOutStart ? Array.from({length:9}, (_,k) => k) : Array.from({length:9}, (_,k) => k+9);
+        frontHoleIndices.forEach(h => {
+          const isOut = h < 9;
+          const idx = isOut ? h : h - 9;
+          const si = ALL_HDCP[h];
+          let scoreA = isOut ? pA.scoresOut[idx] : pA.scoresIn[idx];
+          let scoreB = isOut ? pB.scoresOut[idx] : pB.scoresIn[idx];
+          const hasStroke = hdcpDiff >= si;
+          let netA = scoreA, netB = scoreB;
+          if (hasStroke && weakerIs === 'A') netA -= 1;
+          if (hasStroke && weakerIs === 'B') netB -= 1;
+          if (netA < netB) aWins += 1;
+          else if (netA > netB) aWins -= 1;
+        });
+
+        let statusText;
+        if (aWins > 0) statusText = `<strong class="positive">${pA.name}</strong> が ${aWins}UP`;
+        else if (aWins < 0) statusText = `<strong class="positive">${pB.name}</strong> が ${Math.abs(aWins)}UP`;
+        else statusText = 'All Square';
+
+        html += `<tr><td>${pA.name} vs ${pB.name}</td><td>${statusText}</td></tr>`;
+      }
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // === ベスト途中経過 ===
+  const bestKey = playerCount + '_best';
+  if (selectedGames[bestKey]) {
+    html += `<div class="midway-section">`;
+    html += `<h4 class="midway-section-title"><i class="fas fa-trophy"></i> ベスト（前半終了時点）</h4>`;
+    html += `<table class="midway-table"><thead><tr><th>プレーヤー</th><th>ベストpt</th></tr></thead><tbody>`;
+
+    // 前半9ホールのベスト計算
+    const frontHoleIndices = isOutStart ? Array.from({length:9}, (_,k) => k) : Array.from({length:9}, (_,k) => k+9);
+    const bestPts = {};
+    players.forEach(p => { bestPts[p.index] = 0; });
+    let nextCarryOver = false;
+
+    frontHoleIndices.forEach(h => {
+      const isOut = h < 9;
+      const idx = isOut ? h : h - 9;
+      const par = ALL_PAR[h];
+      const si = ALL_HDCP[h];
+      const isCarryOver = nextCarryOver;
+      nextCarryOver = false;
+
+      const scores = players.map(p => {
+        const gross = isOut ? p.scoresOut[idx] : p.scoresIn[idx];
+        return { player: p, gross, vsPar: gross - par };
+      });
+
+      let soleBestIdx = -1;
+      for (let i = 0; i < players.length; i++) {
+        let beatsAll = true;
+        for (let j = 0; j < players.length; j++) {
+          if (i === j) continue;
+          const pHdcpDiff = Math.abs(players[i].hdcp - players[j].hdcp);
+          const pairStrokes = getHoleStrokes(pHdcpDiff, si);
+          let netI = scores[i].gross;
+          let netJ = scores[j].gross;
+          if (players[i].hdcp > players[j].hdcp) netI -= pairStrokes;
+          else if (players[j].hdcp > players[i].hdcp) netJ -= pairStrokes;
+          if (netI >= netJ) { beatsAll = false; break; }
+        }
+        if (beatsAll) { soleBestIdx = i; break; }
+      }
+
+      const n = players.length;
+      const others = n - 1;
+      const multiplier = isCarryOver ? 2 : 1;
+
+      if (soleBestIdx >= 0) {
+        bestPts[players[soleBestIdx].index] += others * 1 * multiplier;
+        scores.forEach(s => {
+          if (s.player.index !== players[soleBestIdx].index) {
+            bestPts[s.player.index] -= 1 * multiplier;
+          }
+        });
+      }
+
+      // バーディ/イーグルポイント
+      scores.forEach(s => {
+        let ptPerPlayer = 0;
+        if (s.vsPar <= -3) ptPerPlayer = 3;
+        else if (s.vsPar === -2) ptPerPlayer = 2;
+        else if (s.vsPar === -1) ptPerPlayer = 1;
+        if (ptPerPlayer > 0) {
+          bestPts[s.player.index] += others * ptPerPlayer;
+          scores.forEach(other => {
+            if (other.player.index !== s.player.index) {
+              bestPts[other.player.index] -= ptPerPlayer;
+            }
+          });
+        }
+      });
+
+      // キャリーオーバー判定
+      const allSameGross = scores.every(s => s.gross === scores[0].gross);
+      let allPairsTied = true;
+      if (allSameGross) {
+        for (let i = 0; i < players.length && allPairsTied; i++) {
+          for (let j = i + 1; j < players.length && allPairsTied; j++) {
+            const pHdcpDiff = Math.abs(players[i].hdcp - players[j].hdcp);
+            if (getHoleStrokes(pHdcpDiff, si) > 0) allPairsTied = false;
+          }
+        }
+      } else {
+        allPairsTied = false;
+      }
+      if (allSameGross && allPairsTied) nextCarryOver = true;
+    });
+
+    // ポイント順でソート
+    const sortedBest = [...players].sort((a, b) => bestPts[b.index] - bestPts[a.index]);
+    sortedBest.forEach(p => {
+      const pt = bestPts[p.index];
+      const cls = pt > 0 ? 'positive' : (pt < 0 ? 'negative' : '');
+      html += `<tr><td>${p.name}</td><td class="${cls}"><strong>${pt > 0 ? '+' : ''}${pt}</strong>pt</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  html += `</div>`;
+
+  // モーダルで表示
+  const modal = document.getElementById('midway-result-modal');
+  const content = document.getElementById('midway-result-body');
+  if (modal && content) {
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+  }
+}
+
+function closeMidwayResult() {
+  const modal = document.getElementById('midway-result-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 function calculateAndShow() {
   // テーブル合計を計算
   calculateTableTotals('score-table-out');
@@ -2516,6 +2859,7 @@ document.addEventListener('input', function(e) {
     }
     colorizeScoreInput(e.target);
     saveScores();
+    checkMidwayAvailable();
   }
 });
 
@@ -2638,17 +2982,20 @@ function openNumpad(input) {
     }
 
     // 縦スクロール：アクティブセルが可視領域に入る最小限のスクロールのみ行う
-    const visibleTop = 105; // app-header(56) + page-header(~49)
-    const visibleBottom = window.innerHeight - numpadHeight - 10;
-    const cellRect = input.getBoundingClientRect();
+    // 2フレーム待ってレイアウト確定後にスクロール判定する
+    requestAnimationFrame(() => {
+      const visibleTop = 105; // app-header(56) + page-header(~49)
+      const visibleBottom = window.innerHeight - numpadHeight - 10;
+      const cellRect = input.getBoundingClientRect();
 
-    if (cellRect.top < visibleTop) {
-      // セルが上に隠れている → 上にスクロール
-      window.scrollTo({ top: window.scrollY - (visibleTop - cellRect.top) - 10, behavior: 'smooth' });
-    } else if (cellRect.bottom > visibleBottom) {
-      // セルがナンバーパッドの下に隠れている → 下にスクロール（最小限）
-      window.scrollTo({ top: window.scrollY + (cellRect.bottom - visibleBottom) + 10, behavior: 'smooth' });
-    }
+      if (cellRect.top < visibleTop) {
+        // セルが上に隠れている → 上にスクロール
+        window.scrollBy({ top: cellRect.top - visibleTop - 10, behavior: 'smooth' });
+      } else if (cellRect.bottom > visibleBottom) {
+        // セルがナンバーパッドの下に隠れている → 下にスクロール（最小限）
+        window.scrollBy({ top: cellRect.bottom - visibleBottom + 10, behavior: 'smooth' });
+      }
+    });
   });
 }
 
@@ -2762,7 +3109,12 @@ document.addEventListener('keydown', function(e) {
 document.addEventListener('click', function(e) {
   if (e.target.classList.contains('score-input')) {
     e.preventDefault();
-    e.target.blur(); // キーボードを出さない
+    // readonlyなのでキーボードは出ないが、念のためフォーカスを外す
+    // blur()による画面ジャンプを防ぐため、scrollTopを保持する
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    e.target.blur();
+    window.scrollTo(scrollX, scrollY);
     openNumpad(e.target);
   }
 });
@@ -4039,6 +4391,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // score-inputをreadonlyに
     makeScoreInputsReadonly();
+
+    // 途中経過ボタンの表示チェック
+    checkMidwayAvailable();
 
     // ショットトラッカー初期化
     initShotTracker();

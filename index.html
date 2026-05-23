@@ -24,7 +24,7 @@
   <!-- Tesseract.js OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
-  <link rel="stylesheet" href="style.css?v=20260511g">
+  <link rel="stylesheet" href="style.css?v=20260523a">
   <script>
     window.onerror = function(msg, url, line, col, err) {
       document.title = 'ERR: ' + msg;
@@ -190,11 +190,11 @@
         </div>
       </div>
 
-      <!-- 団体戦後半レート -->
+      <!-- 後半レート -->
       <div class="section-card team-rate-section" id="team-rate-section">
         <h2 class="section-title">
-          団体戦後半レート
-          <span class="section-title-en">Team Back Half Rate</span>
+          後半レート
+          <span class="section-title-en">Back Half Rate</span>
         </h2>
         <div class="team-rate-selector" id="team-rate-selector">
           <button class="team-rate-btn active" data-rate="15" onclick="setTeamBackRate(15)">
@@ -553,6 +553,12 @@
           </div>
         </div>
 
+        <!-- 途中経過ボタン -->
+        <button class="btn-midway" id="btn-midway-result" onclick="showMidwayResult()" style="display:none;">
+          <i class="fas fa-flag-checkered"></i>
+          <span>途中経過を表示</span>
+        </button>
+
         <button class="btn-primary btn-calculate" onclick="calculateAndShow()">
           <i class="fas fa-calculator"></i>
           <span>ゲームを計算する</span>
@@ -636,6 +642,20 @@
             <button class="numpad-nav-btn" onclick="numpadPrev()"><i class="fas fa-chevron-left"></i> 前</button>
             <span class="numpad-progress" id="numpad-progress">1/36</span>
             <button class="numpad-nav-btn" onclick="numpadNext()">次 <i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 途中経過モーダル -->
+      <div id="midway-result-modal" class="midway-result-modal" style="display:none;">
+        <div class="midway-backdrop" onclick="closeMidwayResult()"></div>
+        <div class="midway-sheet">
+          <div class="midway-header">
+            <h3>途中経過</h3>
+            <button class="midway-close" onclick="closeMidwayResult()"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="midway-body" id="midway-result-body">
+            <!-- JSで動的生成 -->
           </div>
         </div>
       </div>
@@ -991,7 +1011,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260511g"></script>
+  <script src="app.js?v=20260523a"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {
