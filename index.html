@@ -24,7 +24,7 @@
   <!-- Tesseract.js OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
-  <link rel="stylesheet" href="style.css?v=20260523a">
+  <link rel="stylesheet" href="style.css?v=20260611a">
   <script>
     window.onerror = function(msg, url, line, col, err) {
       document.title = 'ERR: ' + msg;
@@ -187,6 +187,26 @@
         </h2>
         <div class="game-type-options" id="game-type-options">
           <!-- JSで動的生成 -->
+        </div>
+      </div>
+
+      <!-- 前半レート -->
+      <div class="section-card team-rate-section" id="team-front-rate-section">
+        <h2 class="section-title">
+          前半レート
+          <span class="section-title-en">Front Half Rate</span>
+        </h2>
+        <div class="team-rate-selector" id="team-front-rate-selector">
+          <button class="team-rate-btn active" data-frontrate="lunch" onclick="setTeamFrontRate('lunch')">
+            <i class="fas fa-utensils"></i>
+            <span>ランチ</span>
+            <small>勝者がランチ獲得</small>
+          </button>
+          <button class="team-rate-btn" data-frontrate="15" onclick="setTeamFrontRate(15)">
+            <i class="fas fa-coins"></i>
+            <span>ツル半</span>
+            <small>15ポイント</small>
+          </button>
         </div>
       </div>
 
@@ -1011,7 +1031,7 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20260523a"></script>
+  <script src="app.js?v=20260611a"></script>
   <script>
     // Service Worker 登録 + 強制更新
     if ('serviceWorker' in navigator) {

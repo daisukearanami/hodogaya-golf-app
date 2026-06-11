@@ -8,6 +8,7 @@ let playerCount = 4;
 let startCourse = 'IN'; // 'OUT' or 'IN'
 let selectedGreen = 'A'; // 'A' or 'B'
 let selectedTee = 'regular'; // 'back', 'regular', 'front', 'gold'
+let teamFrontRate = 'lunch'; // 'lunch' or 15 (ツル半)
 let teamBackRate = 15; // 15 (ツル半) or 20 (2ツル)
 let roundCount = 1; // 1 or 2
 
@@ -132,19 +133,27 @@ function setTee(tee) {
   updateTeeTotalDisplay();
 }
 
+function setTeamFrontRate(rate) {
+  teamFrontRate = rate;
+  localStorage.setItem('hodogaya_team_front_rate', String(rate));
+  document.querySelectorAll('#team-front-rate-selector .team-rate-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.frontrate === String(rate));
+  });
+}
+
 function setTeamBackRate(rate) {
   teamBackRate = rate;
   localStorage.setItem('hodogaya_team_back_rate', String(rate));
-  document.querySelectorAll('.team-rate-btn').forEach(btn => {
+  document.querySelectorAll('#team-rate-selector .team-rate-btn').forEach(btn => {
     btn.classList.toggle('active', parseInt(btn.dataset.rate) === rate);
   });
 }
 
 function updateTeamRateVisibility() {
   const section = document.getElementById('team-rate-section');
-  if (!section) return;
-  // 全プレーヤー人数で後半レート選択を表示
-  section.style.display = '';
+  const frontSection = document.getElementById('team-front-rate-section');
+  if (section) section.style.display = '';
+  if (frontSection) frontSection.style.display = '';
 }
 
 // =================== ラウンド数設定 ===================
@@ -1039,14 +1048,29 @@ function renderResultPage(players, teamResult, individualResult, bestResult, nak
   if (teamResult) {
     const tr = teamResult;
     const isOutStart = startCourse === 'OUT';
+    const frontResults = isOutStart ? tr.results.slice(0, 9) : tr.results.slice(9);
     const backResults = isOutStart ? tr.results.slice(9) : tr.results.slice(0, 9);
+    const frontPoints = frontResults.reduce((s, r) => s + r.points, 0);
     const backPoints = backResults.reduce((s, r) => s + r.points, 0);
+
+    let totalLPt = 0;
+    let totalRPt = 0;
+
+    // 前半
+    if (teamFrontRate === 15) {
+      const frontWinner = frontPoints > 0 ? 'L' : (frontPoints < 0 ? 'R' : null);
+      totalLPt += frontWinner === 'L' ? 15 : (frontWinner === 'R' ? -15 : 0);
+      totalRPt += frontWinner === 'R' ? 15 : (frontWinner === 'L' ? -15 : 0);
+    }
+
+    // 後半
     const backWinner = backPoints > 0 ? 'L' : (backPoints < 0 ? 'R' : null);
-    const lPt = backWinner === 'L' ? teamBackRate : (backWinner === 'R' ? -teamBackRate : 0);
-    const rPt = backWinner === 'R' ? teamBackRate : (backWinner === 'L' ? -teamBackRate : 0);
+    totalLPt += backWinner === 'L' ? teamBackRate : (backWinner === 'R' ? -teamBackRate : 0);
+    totalRPt += backWinner === 'R' ? teamBackRate : (backWinner === 'L' ? -teamBackRate : 0);
+
     const pts = {};
-    tr.teams.teamL.forEach(p => { pts[p.index] = lPt; });
-    tr.teams.teamR.forEach(p => { pts[p.index] = rPt; });
+    tr.teams.teamL.forEach(p => { pts[p.index] = totalLPt; });
+    tr.teams.teamR.forEach(p => { pts[p.index] = totalRPt; });
     gameRows.push({ label: '団体戦', pts });
   }
 
@@ -1120,14 +1144,29 @@ function computeGamePointRows(players, results, labelPrefix) {
   if (results.teamResult) {
     const tr = results.teamResult;
     const isOutStart = startCourse === 'OUT';
+    const frontResults = isOutStart ? tr.results.slice(0, 9) : tr.results.slice(9);
     const backResults = isOutStart ? tr.results.slice(9) : tr.results.slice(0, 9);
+    const frontPoints = frontResults.reduce((s, r) => s + r.points, 0);
     const backPoints = backResults.reduce((s, r) => s + r.points, 0);
+
+    let totalLPt = 0;
+    let totalRPt = 0;
+
+    // 前半
+    if (teamFrontRate === 15) {
+      const frontWinner = frontPoints > 0 ? 'L' : (frontPoints < 0 ? 'R' : null);
+      totalLPt += frontWinner === 'L' ? 15 : (frontWinner === 'R' ? -15 : 0);
+      totalRPt += frontWinner === 'R' ? 15 : (frontWinner === 'L' ? -15 : 0);
+    }
+
+    // 後半
     const backWinner = backPoints > 0 ? 'L' : (backPoints < 0 ? 'R' : null);
-    const lPt = backWinner === 'L' ? teamBackRate : (backWinner === 'R' ? -teamBackRate : 0);
-    const rPt = backWinner === 'R' ? teamBackRate : (backWinner === 'L' ? -teamBackRate : 0);
+    totalLPt += backWinner === 'L' ? teamBackRate : (backWinner === 'R' ? -teamBackRate : 0);
+    totalRPt += backWinner === 'R' ? teamBackRate : (backWinner === 'L' ? -teamBackRate : 0);
+
     const pts = {};
-    tr.teams.teamL.forEach(p => { pts[p.index] = lPt; });
-    tr.teams.teamR.forEach(p => { pts[p.index] = rPt; });
+    tr.teams.teamL.forEach(p => { pts[p.index] = totalLPt; });
+    tr.teams.teamR.forEach(p => { pts[p.index] = totalRPt; });
     rows.push({ label: prefix + '団体戦', pts });
   }
 
@@ -1332,16 +1371,25 @@ function renderTeamGameResult(tr, players) {
         </div>
       </div>`;
 
-  // 前半（ランチ）
+  // 前半
   html += buildTeamTable(frontLabel, frontResults, frontStart, frontPoints);
   const frontWinner = frontPoints > 0 ? 'L組' : (frontPoints < 0 ? 'R組' : null);
   const frontWinClass = frontPoints > 0 ? 'team-l-wins' : (frontPoints < 0 ? 'team-r-wins' : 'team-draw');
-  html += `
+  if (teamFrontRate === 15) {
+    html += `
+    <div class="team-half-result ${frontWinClass}">
+      <div class="thr-half">前半（${frontLabel}）</div>
+      <div class="thr-points">${frontPoints > 0 ? '+' : ''}${frontPoints} pt</div>
+      <div class="thr-reward"><i class="fas fa-coins"></i> ${frontWinner ? frontWinner + ' +15pt / ' + (frontWinner === 'L組' ? 'R組' : 'L組') + ' -15pt' : '引き分け'}</div>
+    </div>`;
+  } else {
+    html += `
     <div class="team-half-result ${frontWinClass}">
       <div class="thr-half">前半（${frontLabel}）</div>
       <div class="thr-points">${frontPoints > 0 ? '+' : ''}${frontPoints} pt</div>
       <div class="thr-reward"><i class="fas fa-utensils"></i> ${frontWinner ? frontWinner + ' がランチ獲得' : '引き分け'}</div>
     </div>`;
+  }
 
   // 後半（団体戦後半レート）
   html += buildTeamTable(backLabel, backResults, backStart, backPoints);
@@ -1360,21 +1408,37 @@ function renderTeamGameResult(tr, players) {
   teams.teamL.concat(teams.teamR).forEach(p => { html += `<th>${p.name}</th>`; });
   html += `</tr></thead><tbody>`;
 
-  // 後半のポイントを各メンバーに配分
-  const lPt = backWinner === 'L組' ? teamBackRate : (backWinner === 'R組' ? -teamBackRate : 0);
-  const rPt = backWinner === 'R組' ? teamBackRate : (backWinner === 'L組' ? -teamBackRate : 0);
+  // 前半のポイントを各メンバーに配分（ツル半の場合のみ）
   const allMembers = teams.teamL.concat(teams.teamR);
-  const memberPts = allMembers.map((p, i) => i < 2 ? lPt : rPt);
+  let frontLPt = 0, frontRPt = 0;
+  if (teamFrontRate === 15) {
+    frontLPt = frontWinner === 'L組' ? 15 : (frontWinner === 'R組' ? -15 : 0);
+    frontRPt = frontWinner === 'R組' ? 15 : (frontWinner === 'L組' ? -15 : 0);
+    const frontMemberPts = allMembers.map((p, i) => i < 2 ? frontLPt : frontRPt);
+    html += `<tr><td class="td-label">前半</td>`;
+    frontMemberPts.forEach(pt => {
+      const cls = pt > 0 ? 'positive' : (pt < 0 ? 'negative' : '');
+      html += `<td class="${cls}">${pt > 0 ? '+' : ''}${pt}</td>`;
+    });
+    html += `</tr>`;
+  }
+
+  // 後半のポイントを各メンバーに配分
+  const backLPt = backWinner === 'L組' ? teamBackRate : (backWinner === 'R組' ? -teamBackRate : 0);
+  const backRPt = backWinner === 'R組' ? teamBackRate : (backWinner === 'L組' ? -teamBackRate : 0);
+  const backMemberPts = allMembers.map((p, i) => i < 2 ? backLPt : backRPt);
 
   html += `<tr><td class="td-label">後半</td>`;
-  memberPts.forEach(pt => {
+  backMemberPts.forEach(pt => {
     const cls = pt > 0 ? 'positive' : (pt < 0 ? 'negative' : '');
     html += `<td class="${cls}">${pt > 0 ? '+' : ''}${pt}</td>`;
   });
   html += `</tr>`;
 
+  // 合計行
+  const totalMemberPts = allMembers.map((p, i) => (i < 2 ? frontLPt + backLPt : frontRPt + backRPt));
   html += `<tr class="total-row"><td class="td-label">団体戦合計</td>`;
-  memberPts.forEach(pt => {
+  totalMemberPts.forEach(pt => {
     const cls = pt > 0 ? 'positive' : (pt < 0 ? 'negative' : '');
     html += `<td class="${cls}"><strong>${pt > 0 ? '+' : ''}${pt}</strong></td>`;
   });
@@ -2388,6 +2452,7 @@ function fillOcrScores(tableId, scores) {
     inputs.forEach((inp, hIdx) => {
       if (hIdx < scores[pIdx].length && scores[pIdx][hIdx] != null) {
         inp.value = scores[pIdx][hIdx];
+        inp.setAttribute('data-modified', 'true');
       }
     });
   });
@@ -2436,6 +2501,7 @@ function isFrontNineComplete() {
   for (let i = 0; i < playerCount; i++) {
     const inputs = rows[i].querySelectorAll('.score-input');
     for (let h = 0; h < 9; h++) {
+      if (!inputs[h]?.getAttribute('data-modified')) return false;
       const val = parseInt(inputs[h]?.value);
       if (isNaN(val) || val === 0) return false;
     }
@@ -2453,6 +2519,7 @@ function isBackNineComplete() {
   for (let i = 0; i < playerCount; i++) {
     const inputs = rows[i].querySelectorAll('.score-input');
     for (let h = 0; h < 9; h++) {
+      if (!inputs[h]?.getAttribute('data-modified')) return false;
       const val = parseInt(inputs[h]?.value);
       if (isNaN(val) || val === 0) return false;
     }
@@ -2552,7 +2619,11 @@ function showMidwayResult() {
       html += `</div>`;
       html += `<div class="team-half-result ${winClass}" style="margin-top:8px;">`;
       html += `<div class="thr-points">${frontPoints > 0 ? '+' : ''}${frontPoints} pt</div>`;
-      html += `<div class="thr-reward"><i class="fas fa-utensils"></i> ${winner ? winner + ' がランチ獲得' : '引き分け'}</div>`;
+      if (teamFrontRate === 15) {
+        html += `<div class="thr-reward"><i class="fas fa-coins"></i> ${winner ? winner + ' +15pt / ' + (winner === 'L組' ? 'R組' : 'L組') + ' -15pt' : '引き分け'}</div>`;
+      } else {
+        html += `<div class="thr-reward"><i class="fas fa-utensils"></i> ${winner ? winner + ' がランチ獲得' : '引き分け'}</div>`;
+      }
       html += `</div></div>`;
     }
   }
@@ -2761,6 +2832,312 @@ function showMidwayResult() {
   }
 }
 
+// =================== 前半のみ結果ページ描画 ===================
+function renderMidwayResultPage(players) {
+  const isOutStart = startCourse === 'OUT';
+  const frontLabel = isOutStart ? 'OUT' : 'IN';
+
+  // --- スコアサマリー（前半のみ） ---
+  const frontGross = players.map(p => {
+    const scores = isOutStart ? p.scoresOut : p.scoresIn;
+    return scores.reduce((a, b) => a + b, 0);
+  });
+  const summaryCards = document.querySelector('.summary-cards');
+  if (summaryCards) {
+    const sorted = [...players].map((p, i) => ({ ...p, frontGross: frontGross[i] })).sort((a, b) => a.frontGross - b.frontGross);
+    const rankClasses = ['rank-1','rank-2','rank-3','rank-4'];
+    const ordinals = ['1st','2nd','3rd','4th'];
+    let html = '';
+    sorted.forEach((p, i) => {
+      html += `
+        <div class="summary-card ${rankClasses[i] || ''}">
+          <div class="rank-badge">${ordinals[i] || (i+1)}</div>
+          <div class="player-name">${p.name}</div>
+          <div class="player-score">${p.frontGross}</div>
+          <div class="player-detail">HDCP ${p.hdcp} / 前半 ${frontLabel}</div>
+        </div>`;
+    });
+    summaryCards.innerHTML = html;
+  }
+
+  // --- ゲーム結果 ---
+  const container = document.getElementById('game-results-container');
+  if (!container) return;
+
+  let html = '';
+  html += `<div class="midway-banner" style="background:var(--gold-light); padding:12px 16px; margin-bottom:16px; border-radius:8px; text-align:center;">
+    <i class="fas fa-flag-checkered" style="color:var(--gold-dark); margin-right:6px;"></i>
+    <strong style="color:var(--navy);">途中経過（前半 ${frontLabel} 終了時点）</strong>
+    <p style="font-size:12px; color:var(--text-light); margin-top:4px;">後半のスコア入力後に再計算すると最終結果が表示されます</p>
+  </div>`;
+
+  // ポイント集計用
+  const gameRows = [];
+  const grandTotal = {};
+  players.forEach(p => { grandTotal[p.index] = 0; });
+
+  // === 団体戦（4人のみ） ===
+  if (playerCount === 4 && selectedGames['4_team']) {
+    const teams = determineTeams(players);
+    if (teams) {
+      const holeStrokes = distributeTeamHdcp(teams.teamL_hdcp, teams.teamR_hdcp);
+      const frontHoles = isOutStart ? Array.from({length:9}, (_,i) => i) : Array.from({length:9}, (_,i) => i+9);
+      let frontPoints = 0;
+      frontHoles.forEach(h => {
+        const r = calcTeamHole(teams.teamL, teams.teamR, h, holeStrokes[h]);
+        frontPoints += r.points;
+      });
+      const winner = frontPoints > 0 ? 'L組' : (frontPoints < 0 ? 'R組' : null);
+
+      // ポイント計算
+      if (teamFrontRate === 15) {
+        const lPt = winner === 'L組' ? 15 : (winner === 'R組' ? -15 : 0);
+        const rPt = winner === 'R組' ? 15 : (winner === 'L組' ? -15 : 0);
+        const pts = {};
+        teams.teamL.forEach(p => { pts[p.index] = lPt; });
+        teams.teamR.forEach(p => { pts[p.index] = rPt; });
+        gameRows.push({ label: '団体戦（前半）', pts });
+      }
+
+      const winClass = frontPoints > 0 ? 'team-l-wins' : (frontPoints < 0 ? 'team-r-wins' : 'team-draw');
+      html += `<div class="team-game-result">`;
+      html += `<h4 class="game-result-title"><i class="fas fa-people-group"></i> 団体戦（前半）</h4>`;
+      html += `<div class="team-result-header">
+        <div class="trh-team trh-l"><span class="trh-label">L組</span><span class="trh-names">${teams.teamL.map(p=>p.name).join(' & ')}</span></div>
+        <div class="trh-vs">VS</div>
+        <div class="trh-team trh-r"><span class="trh-label">R組</span><span class="trh-names">${teams.teamR.map(p=>p.name).join(' & ')}</span></div>
+      </div>`;
+      html += `<div class="team-half-result ${winClass}" style="margin-top:8px;">`;
+      html += `<div class="thr-points">${frontPoints > 0 ? '+' : ''}${frontPoints} pt</div>`;
+      if (teamFrontRate === 15) {
+        html += `<div class="thr-reward"><i class="fas fa-coins"></i> ${winner ? winner + ' +15pt / ' + (winner === 'L組' ? 'R組' : 'L組') + ' -15pt' : '引き分け'}</div>`;
+      } else {
+        html += `<div class="thr-reward"><i class="fas fa-utensils"></i> ${winner ? winner + ' がランチ獲得' : '引き分け'}</div>`;
+      }
+      html += `</div></div>`;
+    }
+  }
+
+  // === 中抜き（3人）- 前半結果 ===
+  if (playerCount === 3 && selectedGames['3_nakanuki']) {
+    const hdcps = isOutStart ? HDCP_OUT : HDCP_IN;
+    const frontScores = players.map(p => {
+      const scores = isOutStart ? p.scoresOut : p.scoresIn;
+      let gross = 0, net = 0;
+      for (let h = 0; h < 9; h++) {
+        const g = scores[h];
+        const strokes = getHoleStrokes(p.hdcp, hdcps[h]);
+        gross += g;
+        net += g - strokes;
+      }
+      return { player: p, gross, net };
+    });
+    const sorted = [...frontScores].sort((a, b) => a.net - b.net);
+    const bestNet = sorted[0].net;
+    const worstNet = sorted[sorted.length - 1].net;
+    const winners = frontScores.filter(s => s.net === bestNet);
+    const losers = frontScores.filter(s => s.net === worstNet);
+    const isDraw = bestNet === worstNet;
+    const winnerNames = winners.map(w => w.player.name).join('・');
+    const loserNames = losers.map(l => l.player.name).join('・');
+    const rewardText = isDraw ? '引き分け' : `${winnerNames} が ${loserNames} からランチ獲得`;
+
+    html += `<div class="nk-game-result">`;
+    html += `<h4 class="game-result-title"><i class="fas fa-arrows-left-right"></i> 中抜き（前半）</h4>`;
+    html += `<table class="nk-half-table"><thead><tr><th></th><th>グロス</th><th>NET</th><th>結果</th></tr></thead><tbody>`;
+    sorted.forEach(s => {
+      const isWin = winners.some(w => w.player.index === s.player.index);
+      const isLose = losers.some(l => l.player.index === s.player.index);
+      const badge = isWin ? '<span class="nk-badge nk-win">勝ち</span>'
+                  : isLose ? '<span class="nk-badge nk-lose">負け</span>'
+                  : isDraw ? '<span class="nk-badge nk-draw">引分</span>'
+                  : '<span class="nk-badge nk-mid">中抜き</span>';
+      html += `<tr><td class="td-label">${s.player.name}</td><td>${s.gross}</td><td><strong>${s.net}</strong></td><td>${badge}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    html += `<div class="nk-reward"><i class="fas fa-utensils"></i> ${rewardText}</div>`;
+    html += `</div>`;
+  }
+
+  // === 個人戦タテ（2人）- 前半結果 ===
+  if (playerCount === 2 && selectedGames['2_individual_v']) {
+    const hdcps = isOutStart ? HDCP_OUT : HDCP_IN;
+    const frontScores = players.map(p => {
+      const scores = isOutStart ? p.scoresOut : p.scoresIn;
+      let gross = 0, net = 0;
+      for (let h = 0; h < 9; h++) {
+        const g = scores[h];
+        const strokes = getHoleStrokes(p.hdcp, hdcps[h]);
+        gross += g;
+        net += g - strokes;
+      }
+      return { player: p, gross, net };
+    });
+    const a = frontScores[0], b = frontScores[1];
+    const isDraw = a.net === b.net;
+    const winner = a.net < b.net ? a : b;
+    const loser = a.net < b.net ? b : a;
+    const rewardText = isDraw ? '引き分け' : `${winner.player.name} が ${loser.player.name} からランチ獲得`;
+    html += `<div class="nk-game-result">`;
+    html += `<h4 class="game-result-title"><i class="fas fa-arrows-up-down"></i> 個人戦（タテ）前半</h4>`;
+    html += `<div class="team-half-result ${isDraw ? 'team-draw' : 'team-l-wins'}" style="margin-top:8px;">`;
+    html += `<div class="thr-reward"><i class="fas fa-utensils"></i> ${rewardText}</div>`;
+    html += `</div></div>`;
+  }
+
+  // === 個人戦マッチプレー途中経過 ===
+  const indKey = playerCount === 2 ? '2_individual_h' : playerCount + '_individual';
+  if (selectedGames[indKey]) {
+    html += `<div class="individual-game-result">`;
+    html += `<h4 class="game-result-title"><i class="fas fa-user"></i> 個人戦（マッチプレー途中経過）</h4>`;
+    html += `<table class="midway-table" style="width:100%; border-collapse:collapse; margin-top:8px;"><thead><tr><th style="text-align:left; padding:6px;">対戦</th><th style="text-align:left; padding:6px;">状況</th></tr></thead><tbody>`;
+
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        const pA = players[i], pB = players[j];
+        const hdcpDiff = Math.abs(pA.hdcp - pB.hdcp);
+        const weakerIs = pA.hdcp > pB.hdcp ? 'A' : (pB.hdcp > pA.hdcp ? 'B' : null);
+
+        let aWins = 0;
+        const frontHoleIndices = isOutStart ? Array.from({length:9}, (_,k) => k) : Array.from({length:9}, (_,k) => k+9);
+        frontHoleIndices.forEach(h => {
+          const isOut = h < 9;
+          const idx = isOut ? h : h - 9;
+          const si = ALL_HDCP[h];
+          let scoreA = isOut ? pA.scoresOut[idx] : pA.scoresIn[idx];
+          let scoreB = isOut ? pB.scoresOut[idx] : pB.scoresIn[idx];
+          const hasStroke = hdcpDiff >= si;
+          let netA = scoreA, netB = scoreB;
+          if (hasStroke && weakerIs === 'A') netA -= 1;
+          if (hasStroke && weakerIs === 'B') netB -= 1;
+          if (netA < netB) aWins += 1;
+          else if (netA > netB) aWins -= 1;
+        });
+
+        let statusText;
+        if (aWins > 0) statusText = `<strong class="positive">${pA.name}</strong> が ${aWins}UP`;
+        else if (aWins < 0) statusText = `<strong class="positive">${pB.name}</strong> が ${Math.abs(aWins)}UP`;
+        else statusText = 'All Square';
+
+        html += `<tr><td style="padding:6px;">${pA.name} vs ${pB.name}</td><td style="padding:6px;">${statusText}</td></tr>`;
+      }
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // === ベスト途中経過 ===
+  const bestKey = playerCount + '_best';
+  if (selectedGames[bestKey]) {
+    const frontHoleIndices = isOutStart ? Array.from({length:9}, (_,k) => k) : Array.from({length:9}, (_,k) => k+9);
+    const bestPts = {};
+    players.forEach(p => { bestPts[p.index] = 0; });
+    let nextCarryOver = false;
+
+    frontHoleIndices.forEach(h => {
+      const isOut = h < 9;
+      const idx = isOut ? h : h - 9;
+      const par = ALL_PAR[h];
+      const si = ALL_HDCP[h];
+      const isCarryOver = nextCarryOver;
+      nextCarryOver = false;
+
+      const scores = players.map(p => {
+        const gross = isOut ? p.scoresOut[idx] : p.scoresIn[idx];
+        return { player: p, gross, vsPar: gross - par };
+      });
+
+      let soleBestIdx = -1;
+      for (let i = 0; i < players.length; i++) {
+        let beatsAll = true;
+        for (let j = 0; j < players.length; j++) {
+          if (i === j) continue;
+          const pHdcpDiff = Math.abs(players[i].hdcp - players[j].hdcp);
+          const pairStrokes = getHoleStrokes(pHdcpDiff, si);
+          let netI = scores[i].gross;
+          let netJ = scores[j].gross;
+          if (players[i].hdcp > players[j].hdcp) netI -= pairStrokes;
+          else if (players[j].hdcp > players[i].hdcp) netJ -= pairStrokes;
+          if (netI >= netJ) { beatsAll = false; break; }
+        }
+        if (beatsAll) { soleBestIdx = i; break; }
+      }
+
+      const n = players.length;
+      const others = n - 1;
+      const multiplier = isCarryOver ? 2 : 1;
+
+      if (soleBestIdx >= 0) {
+        bestPts[players[soleBestIdx].index] += others * 1 * multiplier;
+        scores.forEach(s => {
+          if (s.player.index !== players[soleBestIdx].index) {
+            bestPts[s.player.index] -= 1 * multiplier;
+          }
+        });
+      }
+
+      scores.forEach(s => {
+        let ptPerPlayer = 0;
+        if (s.vsPar <= -3) ptPerPlayer = 3;
+        else if (s.vsPar === -2) ptPerPlayer = 2;
+        else if (s.vsPar === -1) ptPerPlayer = 1;
+        if (ptPerPlayer > 0) {
+          bestPts[s.player.index] += others * ptPerPlayer;
+          scores.forEach(other => {
+            if (other.player.index !== s.player.index) {
+              bestPts[other.player.index] -= ptPerPlayer;
+            }
+          });
+        }
+      });
+
+      const allSameGross = scores.every(s => s.gross === scores[0].gross);
+      let allPairsTied = true;
+      if (allSameGross) {
+        for (let i = 0; i < players.length && allPairsTied; i++) {
+          for (let j = i + 1; j < players.length && allPairsTied; j++) {
+            const pHdcpDiff = Math.abs(players[i].hdcp - players[j].hdcp);
+            if (getHoleStrokes(pHdcpDiff, si) > 0) allPairsTied = false;
+          }
+        }
+      } else {
+        allPairsTied = false;
+      }
+      if (allSameGross && allPairsTied) nextCarryOver = true;
+    });
+
+    const pts = {};
+    players.forEach(p => { pts[p.index] = bestPts[p.index]; });
+    gameRows.push({ label: 'ベスト（前半）', pts });
+
+    html += `<div class="best-game-result">`;
+    html += `<h4 class="game-result-title"><i class="fas fa-trophy"></i> ベスト（前半）</h4>`;
+    html += `<table class="midway-table" style="width:100%; border-collapse:collapse; margin-top:8px;"><thead><tr><th style="text-align:left; padding:6px;">プレーヤー</th><th style="text-align:left; padding:6px;">ベストpt</th></tr></thead><tbody>`;
+    const sortedBest = [...players].sort((a, b) => bestPts[b.index] - bestPts[a.index]);
+    sortedBest.forEach(p => {
+      const pt = bestPts[p.index];
+      const cls = pt > 0 ? 'positive' : (pt < 0 ? 'negative' : '');
+      html += `<tr><td style="padding:6px;">${p.name}</td><td style="padding:6px;" class="${cls}"><strong>${pt > 0 ? '+' : ''}${pt}</strong>pt</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  // === 合計ポイント集計 ===
+  gameRows.forEach(row => {
+    players.forEach(p => { grandTotal[p.index] += row.pts[p.index] || 0; });
+  });
+
+  if (gameRows.length > 0) {
+    html = renderGrandTotal(players, gameRows, grandTotal) + html;
+  }
+
+  if (!html) {
+    html = '<p class="no-results">前半の結果はありません</p>';
+  }
+
+  const container = document.getElementById('game-results-container');
+  if (container) container.innerHTML = html;
+}
+
 function closeMidwayResult() {
   const modal = document.getElementById('midway-result-modal');
   if (modal) modal.style.display = 'none';
@@ -2783,6 +3160,9 @@ function calculateAndShow() {
     p.scoresOut.some(s => s === 0) || p.scoresIn.some(s => s === 0)
   );
 
+  // 前半のみ完了チェック
+  const frontNineOnly = isFrontNineComplete() && !isBackNineComplete();
+
   let playersR2 = null;
   if (roundCount === 2) {
     playersR2 = collectPlayerData('score-table-out-r2', 'score-table-in-r2');
@@ -2790,14 +3170,29 @@ function calculateAndShow() {
       p.scoresOut.some(s => s === 0) || p.scoresIn.some(s => s === 0)
     );
     if (incompleteR1 || incompleteR2) {
+      // 2R時は前半のみ計算には非対応（複雑すぎるため）
       showToast('全ホールのスコアを入力してください');
       return;
     }
   } else {
-    if (incompleteR1) {
+    if (incompleteR1 && !frontNineOnly) {
       showToast('全ホールのスコアを入力してください');
       return;
     }
+  }
+
+  // 前半のみの場合は途中経過として表示
+  if (frontNineOnly && roundCount !== 2) {
+    const frontPlayers = collectFrontNineData();
+    const modal = document.getElementById('loading-modal');
+    modal.style.display = 'flex';
+
+    setTimeout(() => {
+      renderMidwayResultPage(frontPlayers);
+      modal.style.display = 'none';
+      navigateTo('page-result');
+    }, 800);
+    return;
   }
 
   // ゲーム計算
@@ -2976,7 +3371,7 @@ function openNumpad(input) {
         const wrapperScroll = wrapper.scrollLeft;
         // セルが見えていなければスクロール
         if (cellLeft < wrapperScroll || cellLeft + cell.offsetWidth > wrapperScroll + wrapperWidth) {
-          wrapper.scrollTo({ left: Math.max(0, cellLeft - wrapperWidth / 3), behavior: 'smooth' });
+          wrapper.scrollTo({ left: Math.max(0, cellLeft - wrapperWidth / 3), behavior: 'auto' });
         }
       }
     }
@@ -2989,11 +3384,11 @@ function openNumpad(input) {
       const cellRect = input.getBoundingClientRect();
 
       if (cellRect.top < visibleTop) {
-        // セルが上に隠れている → 上にスクロール
-        window.scrollBy({ top: cellRect.top - visibleTop - 10, behavior: 'smooth' });
+        // セルが上に隠れている → 上にスクロール（instant to avoid fighting with user)
+        window.scrollBy({ top: cellRect.top - visibleTop - 10, behavior: 'auto' });
       } else if (cellRect.bottom > visibleBottom) {
         // セルがナンバーパッドの下に隠れている → 下にスクロール（最小限）
-        window.scrollBy({ top: cellRect.bottom - visibleBottom + 10, behavior: 'smooth' });
+        window.scrollBy({ top: cellRect.bottom - visibleBottom + 10, behavior: 'auto' });
       }
     });
   });
@@ -3028,6 +3423,7 @@ function startScoreEntry() {
 function setScoreAndAdvance(value) {
   if (!numpadTarget) return;
   numpadTarget.value = value;
+  numpadTarget.setAttribute('data-modified', 'true');
   numpadTarget.dispatchEvent(new Event('input', { bubbles: true }));
   colorizeScoreInput(numpadTarget);
 
@@ -3106,9 +3502,40 @@ document.addEventListener('keydown', function(e) {
 });
 
 // スコアセルをタップしたらナンバーパッドを開く（readonlyにする）
+// タッチスクロール中の誤タップを防止するため、touchstart/touchend距離を検出
+let _scoreInputTouchStart = null;
+document.addEventListener('touchstart', function(e) {
+  if (e.target.classList.contains('score-input')) {
+    _scoreInputTouchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+  }
+}, { passive: true });
+
+document.addEventListener('touchmove', function(e) {
+  // タッチ移動があった場合はタップではないとマーク
+  if (_scoreInputTouchStart) {
+    const dx = Math.abs(e.touches[0].clientX - _scoreInputTouchStart.x);
+    const dy = Math.abs(e.touches[0].clientY - _scoreInputTouchStart.y);
+    if (dx > 8 || dy > 8) {
+      _scoreInputTouchStart = null; // スクロール中
+    }
+  }
+}, { passive: true });
+
 document.addEventListener('click', function(e) {
   if (e.target.classList.contains('score-input')) {
     e.preventDefault();
+
+    // タッチデバイスでスクロール中のクリックを無視
+    if (_scoreInputTouchStart !== null) {
+      const elapsed = Date.now() - _scoreInputTouchStart.time;
+      // 正常なタップ: touchStartが残っている（移動なし）かつ300ms以内
+      if (elapsed > 300) {
+        _scoreInputTouchStart = null;
+        return;
+      }
+    }
+    _scoreInputTouchStart = null;
+
     // readonlyなのでキーボードは出ないが、念のためフォーカスを外す
     // blur()による画面ジャンプを防ぐため、scrollTopを保持する
     const scrollX = window.scrollX;
@@ -3270,7 +3697,8 @@ function saveScores() {
     rows.forEach((row, pIdx) => {
       const scores = [];
       row.querySelectorAll('.score-input').forEach(inp => {
-        scores.push(inp.value || '');
+        // Only save user-modified cells
+        scores.push(inp.getAttribute('data-modified') ? (inp.value || '') : '');
       });
       data[key][pIdx] = scores;
     });
@@ -3286,7 +3714,7 @@ function saveScores() {
       rows.forEach((row, pIdx) => {
         const scores = [];
         row.querySelectorAll('.score-input').forEach(inp => {
-          scores.push(inp.value || '');
+          scores.push(inp.getAttribute('data-modified') ? (inp.value || '') : '');
         });
         data[key][pIdx] = scores;
       });
@@ -3319,6 +3747,7 @@ function prefillScores() {
       inputs.forEach((inp, hIdx) => {
         if (hIdx < scores[pIdx].length && scores[pIdx][hIdx] !== '') {
           inp.value = scores[pIdx][hIdx];
+          inp.setAttribute('data-modified', 'true');
         }
       });
     });
@@ -4276,6 +4705,7 @@ function applyVoiceInput() {
     var inputs = rows[pidx].querySelectorAll('.score-input');
     if (inputs[holeIdx]) {
       inputs[holeIdx].value = s.score;
+      inputs[holeIdx].setAttribute('data-modified', 'true');
       inputs[holeIdx].dispatchEvent(new Event('input', { bubbles: true }));
       colorizeScoreInput(inputs[holeIdx]);
     }
@@ -4378,6 +4808,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // 団体戦後半レートを復元
     const savedRate = localStorage.getItem('hodogaya_team_back_rate');
     if (savedRate) setTeamBackRate(parseInt(savedRate));
+
+    // 団体戦前半レートを復元
+    const savedFrontRate = localStorage.getItem('hodogaya_team_front_rate');
+    if (savedFrontRate) setTeamFrontRate(savedFrontRate === '15' ? 15 : savedFrontRate);
+
     updateTeamRateVisibility();
 
     // 最近の記録を表示

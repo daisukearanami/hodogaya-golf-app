@@ -2188,6 +2188,7 @@ input, select, button, textarea {
   -webkit-overflow-scrolling: touch;
   margin: 0 -20px;
   padding: 0 20px;
+  touch-action: pan-x pan-y;
 }
 
 .score-table {
@@ -2286,6 +2287,9 @@ input, select, button, textarea {
   outline: none;
   transition: all 0.2s;
   -moz-appearance: textfield;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .score-input::-webkit-inner-spin-button,
