@@ -3134,7 +3134,6 @@ function renderMidwayResultPage(players) {
     html = '<p class="no-results">前半の結果はありません</p>';
   }
 
-  const container = document.getElementById('game-results-container');
   if (container) container.innerHTML = html;
 }
 
