@@ -3351,6 +3351,9 @@ function openNumpad(input) {
   // 表示
   document.getElementById('score-numpad').style.display = 'block';
 
+  // paddingBottom変更によるブラウザの自動スクロール位置調整を防ぐため、現在位置を保存
+  const savedScrollY = window.scrollY;
+
   // ナンバーパッドの高さ分、ページ下部にパディングを追加してINコースが隠れないようにする
   requestAnimationFrame(() => {
     const numpadSheet = document.querySelector('.numpad-sheet');
@@ -3359,6 +3362,9 @@ function openNumpad(input) {
     if (manualContainer) {
       manualContainer.style.paddingBottom = (numpadHeight + 40) + 'px';
     }
+
+    // paddingBottom変更による画面ジャンプを防止：スクロール位置を復元
+    window.scrollTo(window.scrollX, savedScrollY);
 
     // 横スクロール：対象セルが見えるようにテーブルを横スクロール
     const wrapper = input.closest('.score-table-wrapper');
@@ -3375,20 +3381,21 @@ function openNumpad(input) {
       }
     }
 
-    // 縦スクロール：アクティブセルが可視領域に入る最小限のスクロールのみ行う
-    // 2フレーム待ってレイアウト確定後にスクロール判定する
+    // 縦スクロール：セルが完全に画面外にある場合のみスクロール
+    // セルが少しでも見えていればスクロールしない（入力中の画面ジャンプ防止）
     requestAnimationFrame(() => {
       const visibleTop = 105; // app-header(56) + page-header(~49)
       const visibleBottom = window.innerHeight - numpadHeight - 10;
       const cellRect = input.getBoundingClientRect();
 
-      if (cellRect.top < visibleTop) {
-        // セルが上に隠れている → 上にスクロール（instant to avoid fighting with user)
+      if (cellRect.bottom < visibleTop) {
+        // セルが完全に上に隠れている → 上にスクロール
         window.scrollBy({ top: cellRect.top - visibleTop - 10, behavior: 'auto' });
-      } else if (cellRect.bottom > visibleBottom) {
-        // セルがナンバーパッドの下に隠れている → 下にスクロール（最小限）
+      } else if (cellRect.top > visibleBottom) {
+        // セルが完全にナンバーパッドの下に隠れている → 下にスクロール
         window.scrollBy({ top: cellRect.bottom - visibleBottom + 10, behavior: 'auto' });
       }
+      // セルが少しでも可視領域内にあればスクロールしない
     });
   });
 }
